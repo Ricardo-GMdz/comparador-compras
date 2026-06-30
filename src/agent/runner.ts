@@ -5,6 +5,7 @@
 import type { Product, Offer, ComparisonResult } from "../domain/types.js";
 import type { ProductSource } from "../domain/source.js";
 import { compareOffers } from "../compare/index.js";
+import { dedupeOffers } from "./dedupe.js";
 import { logger } from "../logging/logger.js";
 
 /** Parámetros de entrada para ejecutar una comparación de producto. */
@@ -37,8 +38,9 @@ async function collectOffers(
 ): Promise<readonly Offer[]> {
   const results = await Promise.all(sources.map((source) => searchSource(product, source)));
 
-  // `flat` devuelve un arreglo nuevo; no se mutan los arreglos por fuente.
-  return results.flat();
+  // Juntamos las ofertas de todas las fuentes y deduplicamos: una misma oferta
+  // reportada por varias fuentes no debe inflar el ranking ni la comparación.
+  return dedupeOffers(results.flat());
 }
 
 /**

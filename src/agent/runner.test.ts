@@ -97,6 +97,22 @@ describe("runComparison", () => {
     expect(collectedOffers).toEqual([offerA, offerB, offerC]);
   });
 
+  it("deduplica ofertas que aparecen en más de una fuente", async () => {
+    // Arrange: la misma oferta (mismo proveedor/título/moneda) en dos fuentes,
+    // con precios distintos; debe quedar una sola, la más barata.
+    const caro = makeOffer({ productTitle: "iPhone", priceAmount: 120 });
+    const barato = makeOffer({ productTitle: "iPhone", priceAmount: 100 });
+    const sources = [makeFakeSource("uno", [caro]), makeFakeSource("dos", [barato])];
+
+    // Act
+    await runComparison({ query: "x", region: "global", sources });
+
+    // Assert
+    const [, collectedOffers] = compareOffersMock.mock.calls[0];
+    expect(collectedOffers).toHaveLength(1);
+    expect(collectedOffers[0]?.priceAmount).toBe(100);
+  });
+
   it("devuelve el ComparisonResult producido por compareOffers", async () => {
     // Arrange
     const offer = makeOffer();
