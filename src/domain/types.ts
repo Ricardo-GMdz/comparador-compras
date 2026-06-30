@@ -25,6 +25,13 @@ export interface OfferVariant {
   label?: string;
 }
 
+/**
+ * Condición del producto ofertado. Es un eje independiente de la variante
+ * (`tierRank`): describe el estado (nuevo/reacondicionado/usado), no la gama.
+ * `"unknown"` cuando la fuente no pudo determinarla.
+ */
+export type OfferCondition = "new" | "refurbished" | "used" | "unknown";
+
 /** Oferta concreta de un producto en un proveedor y región dados. */
 export interface Offer {
   productTitle: string;
@@ -40,6 +47,8 @@ export interface Offer {
   raw?: string;
   /** Señal de variante para detectar upgrades; ausente si la fuente no la trae. */
   variant?: OfferVariant;
+  /** Condición del producto; ausente equivale a `"unknown"`. */
+  condition?: OfferCondition;
 }
 
 /** Producto buscado por el usuario, acotado a una región. */

@@ -103,6 +103,35 @@ describe("renderComparison", () => {
     expect(output).toContain("Notebook Ultra");
   });
 
+  it("muestra la condición de cada oferta en la tabla", () => {
+    // Arrange
+    const result: ComparisonResult = {
+      product: { query: "notebook", region: "global" },
+      offers: [buildOffer({ condition: "refurbished" })],
+    };
+
+    // Act
+    const output = renderComparison(result);
+
+    // Assert
+    expect(output).toContain("Condición");
+    expect(output).toContain("Reacond.");
+  });
+
+  it("muestra '—' cuando la condición de una oferta es desconocida", () => {
+    // Arrange: sin condition => desconocida.
+    const result: ComparisonResult = {
+      product: { query: "notebook", region: "global" },
+      offers: [buildOffer()],
+    };
+
+    // Act
+    const output = renderComparison(result);
+
+    // Assert
+    expect(output).toContain("—");
+  });
+
   it("muestra el label de la variante en la sugerencia de upgrade", () => {
     // Arrange: el label ("256GB") no está en el título, así que sólo aparece
     // en la salida si el render efectivamente lo incluye.

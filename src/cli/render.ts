@@ -2,22 +2,35 @@
 // Produce strings (no imprime) para facilitar el testeo y mantener
 // la separación entre lógica de presentación y efectos de I/O.
 
-import type { ComparisonResult, Offer } from "../domain/types.js";
+import type { ComparisonResult, Offer, OfferCondition } from "../domain/types.js";
 
 // Separador de columnas y relleno usados al construir la tabla.
 const COLUMN_SEPARATOR = "  ";
 const HEADER_UNDERLINE_CHAR = "-";
 
 // Encabezados de la tabla de ofertas.
-const TABLE_HEADERS = ["#", "Producto", "Proveedor", "Precio", "Confiable"] as const;
+const TABLE_HEADERS = ["#", "Producto", "Proveedor", "Precio", "Condición", "Confiable"] as const;
 
 /** Marca textual para indicar si un proveedor es confiable. */
 const TRUSTED_LABEL = "sí";
 const UNTRUSTED_LABEL = "no";
 
+/** Etiquetas legibles de cada condición; "—" para la desconocida. */
+const CONDITION_LABELS: Readonly<Record<OfferCondition, string>> = {
+  new: "Nuevo",
+  refurbished: "Reacond.",
+  used: "Usado",
+  unknown: "—",
+};
+
 /** Formatea el precio de una oferta como "<monto> <moneda>". */
 function formatPrice(offer: Offer): string {
   return `${offer.priceAmount} ${offer.currency}`;
+}
+
+/** Devuelve la etiqueta legible de la condición de una oferta. */
+function conditionLabel(offer: Offer): string {
+  return CONDITION_LABELS[offer.condition ?? "unknown"];
 }
 
 /** Construye la fila de texto correspondiente a una oferta. */
@@ -27,6 +40,7 @@ function buildRow(offer: Offer, index: number): readonly string[] {
     offer.productTitle,
     offer.provider.name,
     formatPrice(offer),
+    conditionLabel(offer),
     offer.provider.trusted ? TRUSTED_LABEL : UNTRUSTED_LABEL,
   ];
 }

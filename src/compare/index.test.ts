@@ -444,6 +444,97 @@ describe("compareOffers", () => {
     expect(result.upgradeSuggestion).toBeUndefined();
   });
 
+  it("prefiere como best la oferta nueva sobre una reacondicionada más barata", () => {
+    // Arrange
+    const offers = [
+      buildOffer({ productTitle: "reacondicionada", priceAmount: 80, condition: "refurbished" }),
+      buildOffer({ productTitle: "nueva", priceAmount: 100, condition: "new" }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert
+    expect(result.best?.productTitle).toBe("nueva");
+  });
+
+  it("acepta como best una oferta de condición desconocida", () => {
+    // Arrange: desconocida (sin condition) más barata que una nueva.
+    const offers = [
+      buildOffer({ productTitle: "desconocida", priceAmount: 80 }),
+      buildOffer({ productTitle: "nueva", priceAmount: 100, condition: "new" }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert
+    expect(result.best?.productTitle).toBe("desconocida");
+  });
+
+  it("elige una reacondicionada como best solo si no hay nuevas, con aviso", () => {
+    // Arrange: todas reacondicionadas/usadas.
+    const offers = [
+      buildOffer({ productTitle: "reacond-barata", priceAmount: 60, condition: "refurbished" }),
+      buildOffer({ productTitle: "usada", priceAmount: 70, condition: "used" }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert
+    expect(result.best?.productTitle).toBe("reacond-barata");
+    expect(result.notes).toContain("nueva");
+  });
+
+  it("no sugiere como upgrade una oferta reacondicionada", () => {
+    // Arrange: best nueva; candidato de mayor gama pero reacondicionado.
+    const offers = [
+      buildOffer({
+        productTitle: "base",
+        priceAmount: 100,
+        condition: "new",
+        variant: { tierRank: 0 },
+      }),
+      buildOffer({
+        productTitle: "pro-reacond",
+        priceAmount: 130,
+        condition: "refurbished",
+        variant: { tierRank: 1 },
+      }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert
+    expect(result.upgradeSuggestion).toBeUndefined();
+  });
+
+  it("sugiere como upgrade una versión nueva de mayor gama", () => {
+    // Arrange
+    const offers = [
+      buildOffer({
+        productTitle: "base",
+        priceAmount: 100,
+        condition: "new",
+        variant: { tierRank: 0 },
+      }),
+      buildOffer({
+        productTitle: "pro",
+        priceAmount: 130,
+        condition: "new",
+        variant: { tierRank: 1 },
+      }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert
+    expect(result.upgradeSuggestion?.productTitle).toBe("pro");
+  });
+
   it("devuelve las ofertas ya ordenadas por precio", () => {
     // Arrange
     const offers = [

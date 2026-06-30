@@ -327,3 +327,58 @@ describe("toOffer — variant", () => {
     expect(offer?.variant).toEqual({ tierRank: 1 });
   });
 });
+
+describe("toOffer — condition", () => {
+  it.each([
+    ["new", "new"],
+    ["nuevo", "new"],
+    ["refurbished", "refurbished"],
+    ["reacondicionado", "refurbished"],
+    ["used", "used"],
+    ["usado", "used"],
+    ["  New  ", "new"],
+  ])("normaliza la condición '%s' a '%s'", (condition, expected) => {
+    // Arrange
+    const raw = {
+      productTitle: "x",
+      provider: { name: "T" },
+      priceAmount: 10,
+      currency: "USD",
+      condition,
+    };
+
+    // Act
+    const offer = toOffer(raw, "us");
+
+    // Assert
+    expect(offer?.condition).toBe(expected);
+  });
+
+  it("omite la condición cuando el modelo no la provee", () => {
+    // Arrange
+    const raw = { productTitle: "x", provider: { name: "T" }, priceAmount: 10, currency: "USD" };
+
+    // Act
+    const offer = toOffer(raw, "us");
+
+    // Assert
+    expect(offer?.condition).toBeUndefined();
+  });
+
+  it("omite la condición cuando no es reconocible (equivale a desconocida)", () => {
+    // Arrange
+    const raw = {
+      productTitle: "x",
+      provider: { name: "T" },
+      priceAmount: 10,
+      currency: "USD",
+      condition: "abierto-en-caja",
+    };
+
+    // Act
+    const offer = toOffer(raw, "us");
+
+    // Assert
+    expect(offer?.condition).toBeUndefined();
+  });
+});

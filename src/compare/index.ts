@@ -1,4 +1,4 @@
-import type { Offer, Product, ComparisonResult } from "../domain/types.js";
+import type { Offer, OfferCondition, Product, ComparisonResult } from "../domain/types.js";
 import { PRICE_ROUNDING_FACTOR, UPGRADE_MAX_PRICE_RATIO } from "./constants.js";
 
 // Módulo de comparación: funciones puras e inmutables que normalizan,
@@ -122,16 +122,33 @@ function getTierRank(offer: Offer): number {
   return offer.variant?.tierRank ?? 0;
 }
 
+/** Devuelve la condición de una oferta; la ausencia equivale a "unknown". */
+function getCondition(offer: Offer): OfferCondition {
+  return offer.condition ?? "unknown";
+}
+
+/**
+ * Indica si la condición de una oferta es aceptable como "mejor opción":
+ * nueva o desconocida. Criterio conservador: no penalizamos lo que no sabemos,
+ * pero descartamos reacondicionado/usado del best y del upgrade preferidos.
+ */
+function isPreferredCondition(offer: Offer): boolean {
+  const condition = getCondition(offer);
+  return condition === "new" || condition === "unknown";
+}
+
 /**
  * Indica si una oferta puede sugerirse como upgrade respecto de la mejor:
- * debe ser confiable, de gama superior (mayor `tierRank`) y costar algo más
- * que la mejor pero dentro del rango competitivo (hasta el tope configurado).
+ * debe ser confiable, de condición aceptable (no reacondicionado/usado), de
+ * gama superior (mayor `tierRank`) y costar algo más que la mejor pero dentro
+ * del rango competitivo (hasta el tope configurado).
  */
 function isUpgradeCandidate(candidate: Offer, best: Offer): boolean {
   const maxPrice = best.priceAmount * UPGRADE_MAX_PRICE_RATIO;
 
   return (
     candidate.provider.trusted &&
+    isPreferredCondition(candidate) &&
     getTierRank(candidate) > getTierRank(best) &&
     candidate.priceAmount > best.priceAmount &&
     candidate.priceAmount <= maxPrice
@@ -165,10 +182,10 @@ function selectUpgrade(ranked: readonly Offer[], best: Offer): Offer | undefined
  * Compara las ofertas de un producto y arma el ComparisonResult.
  *
  * - `offers`: ofertas normalizadas y ordenadas por precio (moneda dominante).
- * - `best`: la oferta confiable más barata; si no hay ninguna confiable,
- *   queda `undefined` y se anota la advertencia correspondiente.
- * - `upgradeSuggestion`: la versión de mayor gama (`tierRank`) confiable dentro
- *   del rango de precio competitivo por encima de la mejor.
+ * - `best`: la oferta confiable nueva (o de condición desconocida) más barata.
+ *   Si no hay ninguna nueva, cae a la confiable más barata y se anota el aviso.
+ * - `upgradeSuggestion`: la versión de mayor gama (`tierRank`) confiable y de
+ *   condición aceptable dentro del rango de precio competitivo.
  *
  * Función pura e inmutable: no muta la entrada ni produce efectos colaterales.
  */
@@ -183,9 +200,9 @@ export function compareOffers(product: Product, offers: readonly Offer[]): Compa
     };
   }
 
-  const best = ranked.find((offer) => offer.provider.trusted);
+  const trusted = ranked.filter((offer) => offer.provider.trusted);
 
-  if (best === undefined) {
+  if (trusted.length === 0) {
     return {
       product,
       offers: ranked,
@@ -193,11 +210,24 @@ export function compareOffers(product: Product, offers: readonly Offer[]): Compa
     };
   }
 
+  // Preferimos la oferta nueva (o de condición desconocida) más barata; si no
+  // hay ninguna, caemos a la más barata confiable. `ranked` está en orden
+  // ascendente de precio, así que `trusted[0]` es la confiable más barata.
+  const best = trusted.find(isPreferredCondition) ?? trusted[0];
   const upgradeSuggestion = selectUpgrade(ranked, best);
+
+  // Si la mejor opción no es nueva (cayó a reacondicionado/usado), avisamos.
+  const notes = isPreferredCondition(best)
+    ? undefined
+    : "La mejor opción no es nueva: no se encontraron ofertas nuevas confiables. Revisá la condición.";
 
   // Construimos el resultado sin claves opcionales en `undefined` para
   // mantener objetos limpios y predecibles.
-  return upgradeSuggestion === undefined
-    ? { product, offers: ranked, best }
-    : { product, offers: ranked, best, upgradeSuggestion };
+  return {
+    product,
+    offers: ranked,
+    best,
+    ...(upgradeSuggestion !== undefined ? { upgradeSuggestion } : {}),
+    ...(notes !== undefined ? { notes } : {}),
+  };
 }

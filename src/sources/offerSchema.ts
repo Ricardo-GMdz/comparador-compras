@@ -3,7 +3,7 @@
 // el límite (respuesta externa) y convertimos a `Offer` de forma inmutable.
 
 import { z } from "zod";
-import type { Offer, OfferVariant, Provider } from "../domain/types.js";
+import type { Offer, OfferCondition, OfferVariant, Provider } from "../domain/types.js";
 
 // Cantidad máxima de ofertas que aceptamos de una sola respuesta del modelo.
 // Acota el tamaño de la salida y evita procesar listas desmesuradas.
@@ -33,6 +33,8 @@ export const rawOfferSchema = z.object({
   currency: z.string().min(1),
   url: z.string().url().optional(),
   variant: rawVariantSchema.optional(),
+  // Condición tal como la reporta el modelo (texto libre); se normaliza al mapear.
+  condition: z.string().optional(),
 });
 
 // Lista de ofertas crudas. La validación de longitud máxima se aplica afuera,
@@ -147,6 +149,30 @@ function toVariant(raw: RawOffer["variant"]): OfferVariant | undefined {
   return label !== undefined ? { tierRank, label } : { tierRank };
 }
 
+// Mapa de textos reconocidos (modelo en inglés o español) a la condición.
+const CONDITION_BY_TEXT: Readonly<Record<string, OfferCondition>> = {
+  new: "new",
+  nuevo: "new",
+  refurbished: "refurbished",
+  reacondicionado: "refurbished",
+  renewed: "refurbished",
+  used: "used",
+  usado: "used",
+};
+
+/**
+ * Normaliza la condición cruda (texto libre del modelo) a `OfferCondition`.
+ * Devuelve `undefined` si no se reconoce o está ausente, lo que el comparador
+ * trata como condición desconocida (no se inventa "new").
+ */
+function parseCondition(raw: string | undefined): OfferCondition | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  return CONDITION_BY_TEXT[raw.trim().toLowerCase()];
+}
+
 // Construye un `Provider` inmutable a partir del proveedor crudo.
 function toProvider(raw: RawOffer["provider"]): Provider {
   return {
@@ -165,6 +191,7 @@ export function toOffer(raw: RawOffer, region: string): Offer | undefined {
   }
 
   const variant = toVariant(raw.variant);
+  const condition = parseCondition(raw.condition);
 
   return {
     productTitle: raw.productTitle,
@@ -174,6 +201,7 @@ export function toOffer(raw: RawOffer, region: string): Offer | undefined {
     region,
     ...(raw.url !== undefined ? { url: raw.url } : {}),
     ...(variant !== undefined ? { variant } : {}),
+    ...(condition !== undefined ? { condition } : {}),
     raw: JSON.stringify(raw),
   };
 }
