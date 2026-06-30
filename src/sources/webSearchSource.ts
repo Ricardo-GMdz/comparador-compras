@@ -36,8 +36,13 @@ function buildSystemPrompt(): string {
     "Respondé EXCLUSIVAMENTE con un arreglo JSON (sin texto adicional, sin ```),",
     "donde cada elemento tiene la forma:",
     '{ "productTitle": string, "provider": { "name": string, "url"?: string, "trusted"?: boolean },',
-    '  "priceAmount": number | string, "currency": string (ISO 4217), "url"?: string }.',
+    '  "priceAmount": number | string, "currency": string (ISO 4217), "url"?: string,',
+    '  "variant"?: { "tierRank": number, "label"?: string } }.',
     "Marcá trusted=true solo para tiendas reconocidas y confiables.",
+    'Para "variant", compará la oferta con el producto buscado y asigná "tierRank":',
+    "0 = misma gama/versión que lo buscado; un entero positivo = versión SUPERIOR",
+    "(más capacidad, modelo más nuevo, Pro/Plus); un entero negativo = versión inferior.",
+    'Usá "label" como descriptor corto de la variante (ej. "256GB", "Pro 256GB").',
     "Si no encontrás ofertas, respondé con un arreglo vacío [].",
   ].join("\n");
 }

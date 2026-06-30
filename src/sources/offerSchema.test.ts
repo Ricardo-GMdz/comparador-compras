@@ -224,3 +224,106 @@ describe("toOffer", () => {
     expect(offer).toBeUndefined();
   });
 });
+
+describe("toOffer — variant", () => {
+  it("mapea variant cuando el modelo la provee con tierRank entero y label", () => {
+    // Arrange
+    const raw = {
+      productTitle: "iPhone 256GB",
+      provider: { name: "Tienda", trusted: true },
+      priceAmount: 140,
+      currency: "USD",
+      variant: { tierRank: 1, label: "256GB" },
+    };
+
+    // Act
+    const offer = toOffer(raw, "us");
+
+    // Assert
+    expect(offer?.variant).toEqual({ tierRank: 1, label: "256GB" });
+  });
+
+  it("redondea un tierRank no entero al entero más cercano", () => {
+    // Arrange
+    const raw = {
+      productTitle: "x",
+      provider: { name: "T" },
+      priceAmount: 10,
+      currency: "USD",
+      variant: { tierRank: 1.6 },
+    };
+
+    // Act
+    const offer = toOffer(raw, "us");
+
+    // Assert
+    expect(offer?.variant?.tierRank).toBe(2);
+  });
+
+  it("acepta tierRank provisto como string numérico", () => {
+    // Arrange
+    const raw = {
+      productTitle: "x",
+      provider: { name: "T" },
+      priceAmount: 10,
+      currency: "USD",
+      variant: { tierRank: "2" },
+    };
+
+    // Act
+    const offer = toOffer(raw, "us");
+
+    // Assert
+    expect(offer?.variant?.tierRank).toBe(2);
+  });
+
+  it("omite variant cuando el modelo no la provee", () => {
+    // Arrange
+    const raw = {
+      productTitle: "x",
+      provider: { name: "T" },
+      priceAmount: 10,
+      currency: "USD",
+    };
+
+    // Act
+    const offer = toOffer(raw, "us");
+
+    // Assert
+    expect(offer?.variant).toBeUndefined();
+  });
+
+  it("omite variant cuando tierRank no es interpretable", () => {
+    // Arrange
+    const raw = {
+      productTitle: "x",
+      provider: { name: "T" },
+      priceAmount: 10,
+      currency: "USD",
+      variant: { tierRank: "no-es-numero", label: "Pro" },
+    };
+
+    // Act
+    const offer = toOffer(raw, "us");
+
+    // Assert
+    expect(offer?.variant).toBeUndefined();
+  });
+
+  it("omite el label vacío pero conserva el tierRank", () => {
+    // Arrange
+    const raw = {
+      productTitle: "x",
+      provider: { name: "T" },
+      priceAmount: 10,
+      currency: "USD",
+      variant: { tierRank: 1, label: "   " },
+    };
+
+    // Act
+    const offer = toOffer(raw, "us");
+
+    // Assert
+    expect(offer?.variant).toEqual({ tierRank: 1 });
+  });
+});

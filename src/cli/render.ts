@@ -81,7 +81,11 @@ function renderUpgrade(result: ComparisonResult): string | undefined {
   }
 
   const upgrade = result.upgradeSuggestion;
-  return `Upgrade sugerido: ${upgrade.productTitle} — ${formatPrice(upgrade)} (${upgrade.provider.name})`;
+  // Si la oferta trae un descriptor de variante, lo mostramos junto al título.
+  const label = upgrade.variant?.label;
+  const titlePart =
+    label !== undefined ? `${upgrade.productTitle} (${label})` : upgrade.productTitle;
+  return `Upgrade sugerido: ${titlePart} — ${formatPrice(upgrade)} (${upgrade.provider.name})`;
 }
 
 /**

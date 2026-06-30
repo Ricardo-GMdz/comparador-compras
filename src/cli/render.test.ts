@@ -102,4 +102,25 @@ describe("renderComparison", () => {
     expect(output).toContain("Upgrade sugerido:");
     expect(output).toContain("Notebook Ultra");
   });
+
+  it("muestra el label de la variante en la sugerencia de upgrade", () => {
+    // Arrange: el label ("256GB") no está en el título, así que sólo aparece
+    // en la salida si el render efectivamente lo incluye.
+    const upgrade = buildOffer({
+      productTitle: "iPhone variante superior",
+      priceAmount: 1400,
+      variant: { tierRank: 1, label: "256GB" },
+    });
+    const result: ComparisonResult = {
+      product: { query: "iphone", region: "global" },
+      offers: [buildOffer(), upgrade],
+      upgradeSuggestion: upgrade,
+    };
+
+    // Act
+    const output = renderComparison(result);
+
+    // Assert
+    expect(output).toContain("256GB");
+  });
 });

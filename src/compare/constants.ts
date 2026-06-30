@@ -8,14 +8,10 @@ export const PRICE_DECIMALS = 2;
 export const PRICE_ROUNDING_FACTOR = 10 ** PRICE_DECIMALS;
 
 /**
- * Tope superior del "rango similar" para sugerir un upgrade.
- * Una oferta se considera upgrade si cuesta hasta este múltiplo del precio
- * de la mejor opción (ej. 1.25 = hasta 25% más cara).
+ * Tope superior del "rango competitivo" para sugerir un upgrade.
+ * Una versión superior (mayor `tierRank`) se sugiere si cuesta hasta este
+ * múltiplo del precio de la mejor opción (ej. 1.6 = hasta 60% más cara).
+ * Como la mejora la garantiza el `tierRank` (no el precio), el tope puede ser
+ * más amplio sin riesgo de sugerir una oferta que no sea realmente superior.
  */
-export const UPGRADE_MAX_PRICE_RATIO = 1.25;
-
-/**
- * Piso inferior del "rango similar" para sugerir un upgrade.
- * Evita proponer como upgrade algo prácticamente al mismo precio que la mejor.
- */
-export const UPGRADE_MIN_PRICE_RATIO = 1.0;
+export const UPGRADE_MAX_PRICE_RATIO = 1.6;

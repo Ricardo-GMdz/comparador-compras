@@ -3,7 +3,7 @@
 // el límite (respuesta externa) y convertimos a `Offer` de forma inmutable.
 
 import { z } from "zod";
-import type { Offer, Provider } from "../domain/types.js";
+import type { Offer, OfferVariant, Provider } from "../domain/types.js";
 
 // Cantidad máxima de ofertas que aceptamos de una sola respuesta del modelo.
 // Acota el tamaño de la salida y evita procesar listas desmesuradas.
@@ -17,6 +17,13 @@ const rawProviderSchema = z.object({
   trusted: z.boolean().optional(),
 });
 
+// Variante cruda emitida por el modelo. `tierRank` puede venir como número o
+// string ("1"); se interpreta defensivamente al mapear. Ambos campos opcionales.
+const rawVariantSchema = z.object({
+  tierRank: z.union([z.number(), z.string()]).optional(),
+  label: z.string().optional(),
+});
+
 // Oferta cruda emitida por el modelo. El precio puede venir como número o como
 // string (ej. "1.299,00"); lo normalizamos a número en el parseo.
 export const rawOfferSchema = z.object({
@@ -25,6 +32,7 @@ export const rawOfferSchema = z.object({
   priceAmount: z.union([z.number(), z.string()]),
   currency: z.string().min(1),
   url: z.string().url().optional(),
+  variant: rawVariantSchema.optional(),
 });
 
 // Lista de ofertas crudas. La validación de longitud máxima se aplica afuera,
@@ -105,6 +113,40 @@ function parsePriceAmount(raw: number | string): number | undefined {
   return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
+/**
+ * Interpreta el `tierRank` crudo (número o string) como un entero. Devuelve
+ * `undefined` si no es un número finito, para descartar la variante en vez de
+ * inventar una gama.
+ */
+function parseTierRank(raw: number | string | undefined): number | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  const value = typeof raw === "number" ? raw : Number(raw.trim());
+  return Number.isFinite(value) ? Math.round(value) : undefined;
+}
+
+/**
+ * Mapea la variante cruda a `OfferVariant` de forma defensiva. Devuelve
+ * `undefined` si no hay un `tierRank` interpretable (el comparador trata la
+ * ausencia como gama base). Omite el `label` cuando viene vacío.
+ */
+function toVariant(raw: RawOffer["variant"]): OfferVariant | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  const tierRank = parseTierRank(raw.tierRank);
+  if (tierRank === undefined) {
+    return undefined;
+  }
+
+  const label =
+    raw.label !== undefined && raw.label.trim().length > 0 ? raw.label.trim() : undefined;
+  return label !== undefined ? { tierRank, label } : { tierRank };
+}
+
 // Construye un `Provider` inmutable a partir del proveedor crudo.
 function toProvider(raw: RawOffer["provider"]): Provider {
   return {
@@ -122,6 +164,8 @@ export function toOffer(raw: RawOffer, region: string): Offer | undefined {
     return undefined;
   }
 
+  const variant = toVariant(raw.variant);
+
   return {
     productTitle: raw.productTitle,
     provider: toProvider(raw.provider),
@@ -129,6 +173,7 @@ export function toOffer(raw: RawOffer, region: string): Offer | undefined {
     currency: raw.currency.toUpperCase(),
     region,
     ...(raw.url !== undefined ? { url: raw.url } : {}),
+    ...(variant !== undefined ? { variant } : {}),
     raw: JSON.stringify(raw),
   };
 }

@@ -1,9 +1,5 @@
 import type { Offer, Product, ComparisonResult } from "../domain/types.js";
-import {
-  PRICE_ROUNDING_FACTOR,
-  UPGRADE_MAX_PRICE_RATIO,
-  UPGRADE_MIN_PRICE_RATIO,
-} from "./constants.js";
+import { PRICE_ROUNDING_FACTOR, UPGRADE_MAX_PRICE_RATIO } from "./constants.js";
 
 // Módulo de comparación: funciones puras e inmutables que normalizan,
 // ordenan y comparan ofertas para producir un ComparisonResult.
@@ -118,20 +114,51 @@ export function rankOffers(offers: readonly Offer[]): readonly Offer[] {
 }
 
 /**
+ * Devuelve el rango de gama de una oferta. Las ofertas sin señal de variante
+ * se consideran gama base (`0`), de modo que el criterio funcione aunque la
+ * fuente no haya podido inferir la variante.
+ */
+function getTierRank(offer: Offer): number {
+  return offer.variant?.tierRank ?? 0;
+}
+
+/**
  * Indica si una oferta puede sugerirse como upgrade respecto de la mejor:
- * debe ser confiable, tener un título distinto y caer dentro del rango de
- * precio similar (entre el piso y el tope configurados).
+ * debe ser confiable, de gama superior (mayor `tierRank`) y costar algo más
+ * que la mejor pero dentro del rango competitivo (hasta el tope configurado).
  */
 function isUpgradeCandidate(candidate: Offer, best: Offer): boolean {
-  const minPrice = best.priceAmount * UPGRADE_MIN_PRICE_RATIO;
   const maxPrice = best.priceAmount * UPGRADE_MAX_PRICE_RATIO;
 
   return (
     candidate.provider.trusted &&
-    candidate.productTitle !== best.productTitle &&
-    candidate.priceAmount > minPrice &&
+    getTierRank(candidate) > getTierRank(best) &&
+    candidate.priceAmount > best.priceAmount &&
     candidate.priceAmount <= maxPrice
   );
+}
+
+/**
+ * Selecciona el mejor upgrade entre las ofertas ya ordenadas por precio.
+ * Prefiere la mayor gama (`tierRank`); ante igual gama, la más barata (que por
+ * el orden ascendente de `ranked` aparece primero). Devuelve `undefined` si no
+ * hay ninguna candidata válida.
+ */
+function selectUpgrade(ranked: readonly Offer[], best: Offer): Offer | undefined {
+  let upgrade: Offer | undefined;
+
+  for (const offer of ranked) {
+    if (!isUpgradeCandidate(offer, best)) {
+      continue;
+    }
+    // Solo reemplazamos ante gama estrictamente mayor: así, a igual gama, se
+    // conserva la primera (la más barata, por el orden ascendente de `ranked`).
+    if (upgrade === undefined || getTierRank(offer) > getTierRank(upgrade)) {
+      upgrade = offer;
+    }
+  }
+
+  return upgrade;
 }
 
 /**
@@ -140,8 +167,8 @@ function isUpgradeCandidate(candidate: Offer, best: Offer): boolean {
  * - `offers`: ofertas normalizadas y ordenadas por precio (moneda dominante).
  * - `best`: la oferta confiable más barata; si no hay ninguna confiable,
  *   queda `undefined` y se anota la advertencia correspondiente.
- * - `upgradeSuggestion`: la primera oferta confiable, con título distinto,
- *   dentro del rango de precio similar por encima de la mejor.
+ * - `upgradeSuggestion`: la versión de mayor gama (`tierRank`) confiable dentro
+ *   del rango de precio competitivo por encima de la mejor.
  *
  * Función pura e inmutable: no muta la entrada ni produce efectos colaterales.
  */
@@ -166,7 +193,7 @@ export function compareOffers(product: Product, offers: readonly Offer[]): Compa
     };
   }
 
-  const upgradeSuggestion = ranked.find((offer) => isUpgradeCandidate(offer, best));
+  const upgradeSuggestion = selectUpgrade(ranked, best);
 
   // Construimos el resultado sin claves opcionales en `undefined` para
   // mantener objetos limpios y predecibles.

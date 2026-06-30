@@ -314,26 +314,35 @@ describe("compareOffers", () => {
     expect(result.offers).toHaveLength(2);
   });
 
-  it("sugiere upgrade confiable con título distinto dentro del rango similar", () => {
-    // Arrange
+  it("sugiere como upgrade la versión de mayor gama confiable dentro del rango de precio", () => {
+    // Arrange: best es la gama base (tierRank 0); el candidato es superior y
+    // entra en el rango de precio competitivo.
     const offers = [
-      buildOffer({ productTitle: "estándar", priceAmount: 100 }),
-      buildOffer({ productTitle: "pro", priceAmount: 120 }),
+      buildOffer({
+        productTitle: "128GB",
+        priceAmount: 100,
+        variant: { tierRank: 0, label: "128GB" },
+      }),
+      buildOffer({
+        productTitle: "256GB",
+        priceAmount: 140,
+        variant: { tierRank: 1, label: "256GB" },
+      }),
     ];
 
     // Act
     const result = compareOffers(PRODUCT, offers);
 
     // Assert
-    expect(result.best?.productTitle).toBe("estándar");
-    expect(result.upgradeSuggestion?.productTitle).toBe("pro");
+    expect(result.best?.productTitle).toBe("128GB");
+    expect(result.upgradeSuggestion?.productTitle).toBe("256GB");
   });
 
-  it("no sugiere upgrade cuando el precio supera el rango similar", () => {
-    // Arrange
+  it("no sugiere upgrade cuando ninguna oferta es de mayor gama que best", () => {
+    // Arrange: ambas son gama base (tierRank 0), aunque una sea más cara.
     const offers = [
-      buildOffer({ productTitle: "estándar", priceAmount: 100 }),
-      buildOffer({ productTitle: "premium", priceAmount: 200 }),
+      buildOffer({ productTitle: "base-barata", priceAmount: 100 }),
+      buildOffer({ productTitle: "base-cara", priceAmount: 120 }),
     ];
 
     // Act
@@ -343,11 +352,11 @@ describe("compareOffers", () => {
     expect(result.upgradeSuggestion).toBeUndefined();
   });
 
-  it("no sugiere upgrade cuando el candidato tiene el mismo título que best", () => {
-    // Arrange
+  it("no sugiere upgrade cuando la versión superior supera el tope de precio", () => {
+    // Arrange: 200 está fuera del rango competitivo respecto de 100.
     const offers = [
-      buildOffer({ productTitle: "mismo", priceAmount: 100 }),
-      buildOffer({ productTitle: "mismo", priceAmount: 115 }),
+      buildOffer({ productTitle: "base", priceAmount: 100, variant: { tierRank: 0 } }),
+      buildOffer({ productTitle: "premium", priceAmount: 200, variant: { tierRank: 1 } }),
     ];
 
     // Act
@@ -357,14 +366,45 @@ describe("compareOffers", () => {
     expect(result.upgradeSuggestion).toBeUndefined();
   });
 
-  it("no sugiere upgrade cuando el candidato no es confiable", () => {
+  it("elige la versión de mayor gama cuando hay varias superiores en rango", () => {
+    // Arrange: dos upgrades dentro del rango; gana el de mayor tierRank.
+    const offers = [
+      buildOffer({ productTitle: "base", priceAmount: 100, variant: { tierRank: 0 } }),
+      buildOffer({ productTitle: "256GB", priceAmount: 130, variant: { tierRank: 1 } }),
+      buildOffer({ productTitle: "512GB", priceAmount: 150, variant: { tierRank: 2 } }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert
+    expect(result.upgradeSuggestion?.productTitle).toBe("512GB");
+  });
+
+  it("ante igual gama superior, sugiere la más barata", () => {
+    // Arrange: dos ofertas tierRank 1 en rango; gana la más barata.
+    const offers = [
+      buildOffer({ productTitle: "pro-cara", priceAmount: 150, variant: { tierRank: 1 } }),
+      buildOffer({ productTitle: "base", priceAmount: 100, variant: { tierRank: 0 } }),
+      buildOffer({ productTitle: "pro-barata", priceAmount: 130, variant: { tierRank: 1 } }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert
+    expect(result.upgradeSuggestion?.productTitle).toBe("pro-barata");
+  });
+
+  it("no sugiere upgrade cuando la versión superior no es confiable", () => {
     // Arrange
     const offers = [
-      buildOffer({ productTitle: "estándar", priceAmount: 100 }),
+      buildOffer({ productTitle: "base", priceAmount: 100, variant: { tierRank: 0 } }),
       buildOffer({
         productTitle: "pro",
-        priceAmount: 115,
+        priceAmount: 130,
         provider: UNTRUSTED_PROVIDER,
+        variant: { tierRank: 1 },
       }),
     ];
 
@@ -375,11 +415,26 @@ describe("compareOffers", () => {
     expect(result.upgradeSuggestion).toBeUndefined();
   });
 
-  it("no sugiere upgrade cuando el candidato cuesta lo mismo que best", () => {
-    // Arrange
+  it("trata las ofertas sin variant como gama base (tierRank 0)", () => {
+    // Arrange: best sin variant (gama base); candidato con tierRank 1 es upgrade.
     const offers = [
-      buildOffer({ productTitle: "estándar", priceAmount: 100 }),
-      buildOffer({ productTitle: "clon", priceAmount: 100 }),
+      buildOffer({ productTitle: "base-sin-variant", priceAmount: 100 }),
+      buildOffer({ productTitle: "pro", priceAmount: 140, variant: { tierRank: 1 } }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert
+    expect(result.upgradeSuggestion?.productTitle).toBe("pro");
+  });
+
+  it("no sugiere upgrade cuando la versión superior cuesta lo mismo que best", () => {
+    // Arrange: un upgrade debe costar algo más que la mejor opción; a igual
+    // precio no es un "upgrade" sino simplemente otra oferta.
+    const offers = [
+      buildOffer({ productTitle: "base", priceAmount: 100, variant: { tierRank: 0 } }),
+      buildOffer({ productTitle: "pro", priceAmount: 100, variant: { tierRank: 1 } }),
     ];
 
     // Act

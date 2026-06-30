@@ -9,6 +9,22 @@ export interface Provider {
   trusted: boolean;
 }
 
+/**
+ * Señal estructurada de la variante de una oferta respecto del producto
+ * buscado. Permite detectar un upgrade real (una versión superior) en vez de
+ * comparar solo por precio.
+ */
+export interface OfferVariant {
+  /**
+   * Rango relativo de la variante frente al producto consultado:
+   * `0` = misma gama, `> 0` = versión superior (más capacidad, modelo mejor,
+   * Pro), `< 0` = versión inferior.
+   */
+  tierRank: number;
+  /** Descriptor corto de la variante (ej. "256GB", "Pro 256GB"). */
+  label?: string;
+}
+
 /** Oferta concreta de un producto en un proveedor y región dados. */
 export interface Offer {
   productTitle: string;
@@ -22,6 +38,8 @@ export interface Offer {
   url?: string;
   /** Texto crudo de la fuente, útil para depuración y trazabilidad. */
   raw?: string;
+  /** Señal de variante para detectar upgrades; ausente si la fuente no la trae. */
+  variant?: OfferVariant;
 }
 
 /** Producto buscado por el usuario, acotado a una región. */
