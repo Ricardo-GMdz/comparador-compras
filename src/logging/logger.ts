@@ -24,10 +24,11 @@ export interface Logger {
   error(message: string, context?: LogContext): void;
 }
 
-// Mapeo de nivel a stream de salida: warn/error van a stderr, info a stdout.
-// Se evita un número mágico de descriptores usando los streams nombrados.
+// Mapeo de nivel a stream de salida: TODOS los logs (info/warn/error) van a
+// stderr. stdout queda reservado para la SALIDA del programa (el resultado de
+// la comparación), de modo que se pueda redirigir/parsear sin ruido de logs.
 const LEVEL_STREAMS: Readonly<Record<LogLevel, NodeJS.WritableStream>> = {
-  info: process.stdout,
+  info: process.stderr,
   warn: process.stderr,
   error: process.stderr,
 };

@@ -170,4 +170,24 @@ describe("logger por defecto", () => {
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
   });
+
+  it("enruta info/warn/error a stderr y nunca a stdout", async () => {
+    // Arrange: stdout queda reservado para la salida del programa.
+    const stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const { logger } = await import("./logger.js");
+
+    // Act
+    logger.info("i");
+    logger.warn("w");
+    logger.error("e");
+
+    // Assert
+    expect(stderrSpy).toHaveBeenCalledTimes(3);
+    expect(stdoutSpy).not.toHaveBeenCalled();
+
+    // Cleanup
+    stdoutSpy.mockRestore();
+    stderrSpy.mockRestore();
+  });
 });

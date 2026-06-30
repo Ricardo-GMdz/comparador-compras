@@ -43,8 +43,10 @@ async function handleComparar(producto: string, options: CompararOptions): Promi
       sources: [source],
     });
 
-    // El render produce texto puro; la impresión es el único efecto de I/O.
-    logger.info(renderComparison(result));
+    // El resultado es la SALIDA del programa: va a stdout en texto plano, para
+    // que se pueda redirigir o parsear sin el ruido de los logs (que van a
+    // stderr). El render produce el string; la escritura es el efecto de I/O.
+    process.stdout.write(`${renderComparison(result)}\n`);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error inesperado";
     logger.error("Falló la comparación", { message });
