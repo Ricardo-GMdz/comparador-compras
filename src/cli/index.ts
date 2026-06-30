@@ -5,9 +5,9 @@
 import { Command } from "commander";
 
 import { loadEnv } from "../config/env.js";
-import { createWebSearchSource } from "../sources/webSearchSource.js";
 import { runComparison } from "../agent/runner.js";
 import { logger } from "../logging/logger.js";
+import { buildSources } from "./buildSources.js";
 import { renderComparison } from "./render.js";
 
 // Metadatos del programa. Se mantienen como constantes para evitar
@@ -35,12 +35,13 @@ async function handleComparar(producto: string, options: CompararOptions): Promi
     // Validamos el entorno al inicio: falla rápido si falta la API key.
     const env = loadEnv();
 
-    const source = createWebSearchSource({ apiKey: env.anthropicApiKey });
+    // Armamos las fuentes habilitadas (web_search siempre; ML si hay creds).
+    const sources = buildSources(env);
 
     const result = await runComparison({
       query: producto,
       region: options.region,
-      sources: [source],
+      sources,
     });
 
     // El resultado es la SALIDA del programa: va a stdout en texto plano, para

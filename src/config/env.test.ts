@@ -13,6 +13,8 @@ describe("loadEnv", () => {
     // Arrange global: partimos de un entorno limpio y aislado en cada test.
     process.env = { ...originalEnv };
     delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.MERCADO_LIBRE_CLIENT_ID;
+    delete process.env.MERCADO_LIBRE_CLIENT_SECRET;
   });
 
   afterEach(() => {
@@ -54,5 +56,41 @@ describe("loadEnv", () => {
 
     // Act + Assert
     expect(() => loadEnv()).toThrow(/Configuración de entorno inválida/);
+  });
+
+  test("expone las credenciales de MercadoLibre cuando ambas están presentes", () => {
+    // Arrange
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    process.env.MERCADO_LIBRE_CLIENT_ID = "cid";
+    process.env.MERCADO_LIBRE_CLIENT_SECRET = "csecret";
+
+    // Act
+    const env = loadEnv();
+
+    // Assert
+    expect(env.mercadoLibre).toEqual({ clientId: "cid", clientSecret: "csecret" });
+  });
+
+  test("omite MercadoLibre cuando falta una de las credenciales", () => {
+    // Arrange: solo el client id, sin el secret.
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    process.env.MERCADO_LIBRE_CLIENT_ID = "cid";
+
+    // Act
+    const env = loadEnv();
+
+    // Assert
+    expect(env.mercadoLibre).toBeUndefined();
+  });
+
+  test("omite MercadoLibre cuando no hay ninguna credencial", () => {
+    // Arrange
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+
+    // Act
+    const env = loadEnv();
+
+    // Assert
+    expect(env.mercadoLibre).toBeUndefined();
   });
 });

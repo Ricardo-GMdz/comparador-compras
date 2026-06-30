@@ -1,5 +1,7 @@
 .env
 .env.*
+# El template de ejemplo sí se versiona (no tiene secretos).
+!.env.example
 node_modules/
 .DS_Store
 dist/
