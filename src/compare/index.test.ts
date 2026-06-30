@@ -535,6 +535,56 @@ describe("compareOffers", () => {
     expect(result.upgradeSuggestion?.productTitle).toBe("pro");
   });
 
+  it("no elige como best una oferta con precio sospechosamente bajo (outlier)", () => {
+    // Arrange: "error" (50) está muy por debajo de la mediana (~1050) de las
+    // demás; es un outlier (posible error de parseo). best debe ser la siguiente.
+    const offers = [
+      buildOffer({ productTitle: "error", priceAmount: 50 }),
+      buildOffer({ productTitle: "a", priceAmount: 1000 }),
+      buildOffer({ productTitle: "b", priceAmount: 1100 }),
+      buildOffer({ productTitle: "c", priceAmount: 1200 }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert: best no es el outlier, pero el outlier sigue listado.
+    expect(result.best?.productTitle).toBe("a");
+    expect(result.offers).toHaveLength(4);
+  });
+
+  it("avisa cuando omite una oferta sospechosamente barata como best", () => {
+    // Arrange
+    const offers = [
+      buildOffer({ productTitle: "error", priceAmount: 50 }),
+      buildOffer({ productTitle: "a", priceAmount: 1000 }),
+      buildOffer({ productTitle: "b", priceAmount: 1100 }),
+      buildOffer({ productTitle: "c", priceAmount: 1200 }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert
+    expect(result.notes).toContain("sospechosamente");
+  });
+
+  it("no descarta una oferta legítimamente más barata como outlier", () => {
+    // Arrange: 800 vs mediana 1000 (umbral 400) NO es outlier.
+    const offers = [
+      buildOffer({ productTitle: "barata", priceAmount: 800 }),
+      buildOffer({ productTitle: "a", priceAmount: 1000 }),
+      buildOffer({ productTitle: "b", priceAmount: 1200 }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert
+    expect(result.best?.productTitle).toBe("barata");
+    expect(result.notes).toBeUndefined();
+  });
+
   it("devuelve las ofertas ya ordenadas por precio", () => {
     // Arrange
     const offers = [

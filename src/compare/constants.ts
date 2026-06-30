@@ -15,3 +15,11 @@ export const PRICE_ROUNDING_FACTOR = 10 ** PRICE_DECIMALS;
  * más amplio sin riesgo de sugerir una oferta que no sea realmente superior.
  */
 export const UPGRADE_MAX_PRICE_RATIO = 1.6;
+
+/**
+ * Fracción de la mediana por debajo de la cual un precio se considera outlier
+ * (sospechosamente bajo: posible error de parseo o promo engañosa). Ej. 0.4 =
+ * una oferta a menos del 40% de la mediana de las comparables se marca como
+ * sospechosa y no se elige como mejor opción.
+ */
+export const PRICE_OUTLIER_MIN_RATIO = 0.4;

@@ -1,5 +1,9 @@
 import type { Offer, OfferCondition, Product, ComparisonResult } from "../domain/types.js";
-import { PRICE_ROUNDING_FACTOR, UPGRADE_MAX_PRICE_RATIO } from "./constants.js";
+import {
+  PRICE_OUTLIER_MIN_RATIO,
+  PRICE_ROUNDING_FACTOR,
+  UPGRADE_MAX_PRICE_RATIO,
+} from "./constants.js";
 
 // Módulo de comparación: funciones puras e inmutables que normalizan,
 // ordenan y comparan ofertas para producir un ComparisonResult.
@@ -179,6 +183,39 @@ function selectUpgrade(ranked: readonly Offer[], best: Offer): Offer | undefined
 }
 
 /**
+ * Calcula la mediana de los precios de un conjunto de ofertas no vacío.
+ * Usa una copia ordenada para no mutar la entrada.
+ */
+function medianPrice(offers: readonly Offer[]): number {
+  const prices = offers.map((offer) => offer.priceAmount).sort((a, b) => a - b);
+  const mid = Math.floor(prices.length / 2);
+  return prices.length % 2 === 0 ? (prices[mid - 1] + prices[mid]) / 2 : prices[mid];
+}
+
+/**
+ * Indica si el precio de una oferta es un outlier por lo bajo: cae por debajo
+ * de la fracción configurada de la mediana de las comparables. Solo el extremo
+ * bajo importa (un precio alto no es un riesgo de recomendación).
+ */
+function isPriceOutlier(offer: Offer, median: number): boolean {
+  return offer.priceAmount < median * PRICE_OUTLIER_MIN_RATIO;
+}
+
+/**
+ * Construye el aviso de ofertas omitidas por precio sospechosamente bajo,
+ * con la conjugación correcta según la cantidad. Devuelve `undefined` si no
+ * se omitió ninguna.
+ */
+function buildOutlierNote(skipped: number): string | undefined {
+  if (skipped <= 0) {
+    return undefined;
+  }
+
+  const cuenta = skipped === 1 ? "Se omitió 1 oferta" : `Se omitieron ${skipped} ofertas`;
+  return `${cuenta} con precio sospechosamente bajo (posible error o promo engañosa); verificá.`;
+}
+
+/**
  * Compara las ofertas de un producto y arma el ComparisonResult.
  *
  * - `offers`: ofertas normalizadas y ordenadas por precio (moneda dominante).
@@ -210,16 +247,33 @@ export function compareOffers(product: Product, offers: readonly Offer[]): Compa
     };
   }
 
-  // Preferimos la oferta nueva (o de condición desconocida) más barata; si no
-  // hay ninguna, caemos a la más barata confiable. `ranked` está en orden
-  // ascendente de precio, así que `trusted[0]` es la confiable más barata.
-  const best = trusted.find(isPreferredCondition) ?? trusted[0];
+  // Detectamos precios sospechosamente bajos respecto de la mediana, para no
+  // recomendar una oferta que probablemente sea un error o una promo engañosa.
+  const median = medianPrice(ranked);
+  const isOutlier = (offer: Offer): boolean => isPriceOutlier(offer, median);
+
+  // Elegimos la confiable más barata que sea de condición preferida y NO
+  // outlier; relajamos primero la condición y, en último caso, el outlier.
+  // `ranked` está en orden ascendente, así que el primer match es el más barato.
+  const best =
+    trusted.find((offer) => isPreferredCondition(offer) && !isOutlier(offer)) ??
+    trusted.find((offer) => !isOutlier(offer)) ??
+    trusted[0];
+
   const upgradeSuggestion = selectUpgrade(ranked, best);
 
-  // Si la mejor opción no es nueva (cayó a reacondicionado/usado), avisamos.
-  const notes = isPreferredCondition(best)
-    ? undefined
-    : "La mejor opción no es nueva: no se encontraron ofertas nuevas confiables. Revisá la condición.";
+  // Acumulamos los avisos que apliquen (condición no nueva y outliers omitidos).
+  const skippedOutliers = trusted.filter(
+    (offer) => offer.priceAmount < best.priceAmount && isOutlier(offer),
+  ).length;
+
+  const noteParts = [
+    isPreferredCondition(best)
+      ? undefined
+      : "La mejor opción no es nueva: no se encontraron ofertas nuevas confiables. Revisá la condición.",
+    buildOutlierNote(skippedOutliers),
+  ].filter((part): part is string => part !== undefined);
+  const notes = noteParts.length > 0 ? noteParts.join(" ") : undefined;
 
   // Construimos el resultado sin claves opcionales en `undefined` para
   // mantener objetos limpios y predecibles.
