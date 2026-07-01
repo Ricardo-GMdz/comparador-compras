@@ -23,3 +23,13 @@ export const UPGRADE_MAX_PRICE_RATIO = 1.6;
  * sospechosa y no se elige como mejor opción.
  */
 export const PRICE_OUTLIER_MIN_RATIO = 0.4;
+
+/**
+ * Cantidad mínima de ofertas comparables necesaria para activar la detección de
+ * outliers. Con muy pocas ofertas la mediana no representa un consenso: con 2,
+ * la más barata queda siempre por debajo de la mediana (el punto medio), así que
+ * una simple dispersión normal (la cara > 4x la barata) marcaría a la barata
+ * legítima como outlier. Por debajo de este umbral, ninguna oferta se trata como
+ * outlier (se necesita una muestra con consenso contra la cual medir la anomalía).
+ */
+export const PRICE_OUTLIER_MIN_SAMPLE = 4;

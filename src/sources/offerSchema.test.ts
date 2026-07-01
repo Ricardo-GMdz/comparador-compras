@@ -223,6 +223,42 @@ describe("toOffer", () => {
     // Assert
     expect(offer).toBeUndefined();
   });
+
+  it("conserva la oferta y omite la url cuando es malformada (best-effort)", () => {
+    // Arrange: una url relativa/malformada no debe descartar una oferta usable.
+    const raw = {
+      productTitle: "Válida con url mala",
+      provider: { name: "Tienda", trusted: true },
+      priceAmount: 50,
+      currency: "USD",
+      url: "/ruta-relativa",
+    };
+
+    // Act
+    const offer = toOffer(raw, "us");
+
+    // Assert: la oferta sobrevive con sus campos esenciales, sin url.
+    expect(offer).toBeDefined();
+    expect(offer?.productTitle).toBe("Válida con url mala");
+    expect(offer?.url).toBeUndefined();
+  });
+
+  it("conserva la url cuando es válida y absoluta", () => {
+    // Arrange
+    const raw = {
+      productTitle: "Con url válida",
+      provider: { name: "Tienda", trusted: true },
+      priceAmount: 50,
+      currency: "USD",
+      url: "https://tienda.com/p",
+    };
+
+    // Act
+    const offer = toOffer(raw, "us");
+
+    // Assert
+    expect(offer?.url).toBe("https://tienda.com/p");
+  });
 });
 
 describe("toOffer — variant", () => {
@@ -309,6 +345,27 @@ describe("toOffer — variant", () => {
     // Assert
     expect(offer?.variant).toBeUndefined();
   });
+
+  it.each([["  "], [""], ["0x10"], ["1e2"], ["   \t"]])(
+    "omite variant cuando tierRank string es basura/formato raro (%j)",
+    (tierRank) => {
+      // Arrange: un string vacío/espacios o notación hex/exp no es un ranking
+      // limpio; no debe coaccionarse a 0 ni a un entero inventado.
+      const raw = {
+        productTitle: "x",
+        provider: { name: "T" },
+        priceAmount: 10,
+        currency: "USD",
+        variant: { tierRank, label: "Pro" },
+      };
+
+      // Act
+      const offer = toOffer(raw, "us");
+
+      // Assert
+      expect(offer?.variant).toBeUndefined();
+    },
+  );
 
   it("omite el label vacío pero conserva el tierRank", () => {
     // Arrange

@@ -569,6 +569,73 @@ describe("compareOffers", () => {
     expect(result.notes).toContain("sospechosamente");
   });
 
+  it("no marca como outlier la más barata cuando solo hay 2 ofertas (muestra insuficiente)", () => {
+    // Arrange: con 2 ofertas la mediana es el punto medio, así que la barata
+    // queda siempre bajo la mediana. Una dispersión normal (500 = 5x 100) NO
+    // debe descartar la barata legítima: no hay consenso contra el cual medir.
+    const offers = [
+      buildOffer({ productTitle: "barata", priceAmount: 100 }),
+      buildOffer({ productTitle: "cara", priceAmount: 500 }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert: best es la barata legítima, sin aviso de outlier.
+    expect(result.best?.productTitle).toBe("barata");
+    expect(result.best?.priceAmount).toBe(100);
+    expect(result.notes).toBeUndefined();
+  });
+
+  it("no marca como outlier la única oferta cuando hay 1 sola (muestra insuficiente)", () => {
+    // Arrange: con una sola oferta no hay muestra; nunca es outlier de sí misma.
+    const offers = [buildOffer({ productTitle: "unica", priceAmount: 100 })];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert
+    expect(result.best?.productTitle).toBe("unica");
+    expect(result.notes).toBeUndefined();
+  });
+
+  it("no marca como outlier con 3 ofertas (bajo el mínimo de muestra)", () => {
+    // Arrange: 3 ofertas donde la barata quedaría bajo median*0.4 (mediana 1000,
+    // umbral 400, barata 100). Con muestra por debajo del mínimo no se descarta.
+    const offers = [
+      buildOffer({ productTitle: "barata", priceAmount: 100 }),
+      buildOffer({ productTitle: "a", priceAmount: 1000 }),
+      buildOffer({ productTitle: "b", priceAmount: 1100 }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert: best es la barata (no se activa la detección con n < 4).
+    expect(result.best?.productTitle).toBe("barata");
+    expect(result.notes).toBeUndefined();
+  });
+
+  it("avisa cuando la propia mejor opción resulta ser un outlier (todas las confiables lo son)", () => {
+    // Arrange: 2 confiables baratas + 3 no confiables carísimas inflan la
+    // mediana; ambas confiables caen bajo el umbral, así que el best elegido es
+    // él mismo un outlier. No lo omitimos (es lo mejor que hay) pero avisamos.
+    const offers = [
+      buildOffer({ productTitle: "conf-100", priceAmount: 100 }),
+      buildOffer({ productTitle: "conf-120", priceAmount: 120 }),
+      buildOffer({ productTitle: "u1", priceAmount: 5000, provider: UNTRUSTED_PROVIDER }),
+      buildOffer({ productTitle: "u2", priceAmount: 6000, provider: UNTRUSTED_PROVIDER }),
+      buildOffer({ productTitle: "u3", priceAmount: 7000, provider: UNTRUSTED_PROVIDER }),
+    ];
+
+    // Act
+    const result = compareOffers(PRODUCT, offers);
+
+    // Assert: elige la confiable más barata pero avisa que es sospechosa.
+    expect(result.best?.productTitle).toBe("conf-100");
+    expect(result.notes).toContain("mejor opción tiene un precio sospechosamente bajo");
+  });
+
   it("no descarta una oferta legítimamente más barata como outlier", () => {
     // Arrange: 800 vs mediana 1000 (umbral 400) NO es outlier.
     const offers = [

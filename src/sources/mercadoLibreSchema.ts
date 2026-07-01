@@ -50,7 +50,9 @@ const mlItemSchema = z.object({
   title: z.string().min(1),
   price: z.number(),
   currency_id: z.string().min(1),
-  permalink: z.string().url().optional(),
+  // best-effort: se acepta cualquier string y se valida al mapear (ver
+  // `normalizeUrl`). Un permalink malformado omite la URL, no descarta el item.
+  permalink: z.string().optional(),
   condition: z.string().optional(),
   official_store_id: z.number().nullable().optional(),
   seller: z.object({ nickname: z.string().optional() }).optional(),
@@ -73,6 +75,23 @@ function toCondition(raw: string | undefined): OfferCondition | undefined {
   return undefined;
 }
 
+/**
+ * Valida una URL best-effort: devuelve la URL solo si es absoluta y bien
+ * formada; si no, `undefined` (se omite el campo sin descartar el item). Un
+ * permalink cosmético inválido no debe costar una oferta usable.
+ */
+function normalizeUrl(raw: string | undefined): string | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  try {
+    return new URL(raw).href;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Construye el proveedor a partir del item: tienda oficial => confiable. */
 function toProvider(item: MlItem): Provider {
   const trusted = item.official_store_id !== null && item.official_store_id !== undefined;
@@ -89,6 +108,7 @@ function toOffer(item: MlItem, region: string): Offer | undefined {
   }
 
   const condition = toCondition(item.condition);
+  const url = normalizeUrl(item.permalink);
 
   return {
     productTitle: item.title,
@@ -96,7 +116,7 @@ function toOffer(item: MlItem, region: string): Offer | undefined {
     priceAmount: item.price,
     currency: item.currency_id.toUpperCase(),
     region,
-    ...(item.permalink !== undefined ? { url: item.permalink } : {}),
+    ...(url !== undefined ? { url } : {}),
     ...(condition !== undefined ? { condition } : {}),
     raw: JSON.stringify(item),
   };

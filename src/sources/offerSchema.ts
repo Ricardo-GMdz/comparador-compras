@@ -31,7 +31,10 @@ export const rawOfferSchema = z.object({
   provider: rawProviderSchema,
   priceAmount: z.union([z.number(), z.string()]),
   currency: z.string().min(1),
-  url: z.string().url().optional(),
+  // La URL es best-effort: se acepta como string cualquiera y se valida al
+  // mapear (ver `normalizeUrl`). Así una URL malformada/relativa omite el campo
+  // en vez de descartar toda la oferta por un dato cosmético no esencial.
+  url: z.string().optional(),
   variant: rawVariantSchema.optional(),
   // Condición tal como la reporta el modelo (texto libre); se normaliza al mapear.
   condition: z.string().optional(),
@@ -125,7 +128,20 @@ function parseTierRank(raw: number | string | undefined): number | undefined {
     return undefined;
   }
 
-  const value = typeof raw === "number" ? raw : Number(raw.trim());
+  if (typeof raw === "number") {
+    return Number.isFinite(raw) ? Math.round(raw) : undefined;
+  }
+
+  // Para strings exigimos un entero/decimal limpio antes de coaccionar: así el
+  // string vacío o de solo espacios (que `Number("")` convertiría en 0) y las
+  // notaciones raras (hex "0x10", exponencial "1e2") caen a `undefined` y se
+  // omite la variante, coherente con el contrato de "no inventar una gama".
+  const trimmed = raw.trim();
+  if (!/^[+-]?\d+(\.\d+)?$/.test(trimmed)) {
+    return undefined;
+  }
+
+  const value = Number(trimmed);
   return Number.isFinite(value) ? Math.round(value) : undefined;
 }
 
@@ -173,6 +189,23 @@ function parseCondition(raw: string | undefined): OfferCondition | undefined {
   return CONDITION_BY_TEXT[raw.trim().toLowerCase()];
 }
 
+/**
+ * Valida una URL best-effort: devuelve la URL solo si es absoluta y bien
+ * formada; en caso contrario `undefined` (se omite el campo sin descartar la
+ * oferta). Un dato cosmético inválido no debe costar una oferta usable.
+ */
+function normalizeUrl(raw: string | undefined): string | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  try {
+    return new URL(raw).href;
+  } catch {
+    return undefined;
+  }
+}
+
 // Construye un `Provider` inmutable a partir del proveedor crudo.
 function toProvider(raw: RawOffer["provider"]): Provider {
   return {
@@ -192,6 +225,7 @@ export function toOffer(raw: RawOffer, region: string): Offer | undefined {
 
   const variant = toVariant(raw.variant);
   const condition = parseCondition(raw.condition);
+  const url = normalizeUrl(raw.url);
 
   return {
     productTitle: raw.productTitle,
@@ -199,7 +233,7 @@ export function toOffer(raw: RawOffer, region: string): Offer | undefined {
     priceAmount,
     currency: raw.currency.toUpperCase(),
     region,
-    ...(raw.url !== undefined ? { url: raw.url } : {}),
+    ...(url !== undefined ? { url } : {}),
     ...(variant !== undefined ? { variant } : {}),
     ...(condition !== undefined ? { condition } : {}),
     raw: JSON.stringify(raw),

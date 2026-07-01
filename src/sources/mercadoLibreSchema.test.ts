@@ -121,6 +121,30 @@ describe("parseMlSearchResponse", () => {
     expect(offers[0]?.productTitle).toBe("válida");
   });
 
+  it("conserva el item y omite la url cuando el permalink es malformado/relativo", () => {
+    // Arrange: un permalink relativo no debe descartar un item por lo demás válido.
+    const data = {
+      results: [
+        {
+          title: "iPhone con permalink malo",
+          price: 100,
+          currency_id: "MXN",
+          permalink: "/MLM-123",
+          condition: "new",
+        },
+      ],
+    };
+
+    // Act
+    const offers = parseMlSearchResponse(data, "mx");
+
+    // Assert: el item sobrevive con sus campos esenciales, sin url.
+    expect(offers).toHaveLength(1);
+    expect(offers[0]?.productTitle).toBe("iPhone con permalink malo");
+    expect(offers[0]?.url).toBeUndefined();
+    expect(offers[0]?.priceAmount).toBe(100);
+  });
+
   it("lanza cuando la respuesta no tiene la forma esperada", () => {
     expect(() => parseMlSearchResponse({ foo: "bar" }, "mx")).toThrow();
   });

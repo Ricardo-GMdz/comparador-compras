@@ -1,6 +1,7 @@
 import type { Offer, OfferCondition, Product, ComparisonResult } from "../domain/types.js";
 import {
   PRICE_OUTLIER_MIN_RATIO,
+  PRICE_OUTLIER_MIN_SAMPLE,
   PRICE_ROUNDING_FACTOR,
   UPGRADE_MAX_PRICE_RATIO,
 } from "./constants.js";
@@ -216,6 +217,15 @@ function buildOutlierNote(skipped: number): string | undefined {
 }
 
 /**
+ * Aviso para cuando la propia mejor opción resulta ser un outlier: pasa cuando
+ * todas las confiables caen bajo el umbral y el fallback termina eligiendo una
+ * sospechosa. No la omitimos (es lo mejor que hay), pero avisamos en vez de
+ * presentarla en silencio como una ganga.
+ */
+const BEST_IS_OUTLIER_NOTE =
+  "La mejor opción tiene un precio sospechosamente bajo (posible error o promo engañosa); verificá.";
+
+/**
  * Compara las ofertas de un producto y arma el ComparisonResult.
  *
  * - `offers`: ofertas normalizadas y ordenadas por precio (moneda dominante).
@@ -249,8 +259,13 @@ export function compareOffers(product: Product, offers: readonly Offer[]): Compa
 
   // Detectamos precios sospechosamente bajos respecto de la mediana, para no
   // recomendar una oferta que probablemente sea un error o una promo engañosa.
+  // Solo activamos la detección con una muestra suficiente: con muy pocas
+  // ofertas la mediana no representa un consenso y la más barata legítima caería
+  // siempre bajo el umbral (ver PRICE_OUTLIER_MIN_SAMPLE).
+  const outlierDetectionEnabled = ranked.length >= PRICE_OUTLIER_MIN_SAMPLE;
   const median = medianPrice(ranked);
-  const isOutlier = (offer: Offer): boolean => isPriceOutlier(offer, median);
+  const isOutlier = (offer: Offer): boolean =>
+    outlierDetectionEnabled && isPriceOutlier(offer, median);
 
   // Elegimos la confiable más barata que sea de condición preferida y NO
   // outlier; relajamos primero la condición y, en último caso, el outlier.
@@ -267,11 +282,17 @@ export function compareOffers(product: Product, offers: readonly Offer[]): Compa
     (offer) => offer.priceAmount < best.priceAmount && isOutlier(offer),
   ).length;
 
+  // Si el fallback tuvo que elegir una oferta que ella misma es un outlier
+  // (todas las confiables cayeron bajo el umbral), avisamos en vez de
+  // presentarla en silencio como la mejor ganga.
+  const bestIsOutlier = isOutlier(best);
+
   const noteParts = [
     isPreferredCondition(best)
       ? undefined
       : "La mejor opción no es nueva: no se encontraron ofertas nuevas confiables. Revisá la condición.",
     buildOutlierNote(skippedOutliers),
+    bestIsOutlier ? BEST_IS_OUTLIER_NOTE : undefined,
   ].filter((part): part is string => part !== undefined);
   const notes = noteParts.length > 0 ? noteParts.join(" ") : undefined;
 
