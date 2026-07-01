@@ -56,6 +56,9 @@ function buildUserPrompt(product: Product): string {
   return [
     `Buscá ofertas para el producto: "${product.query}".`,
     `Región objetivo: "${product.region}". Usá la moneda y tiendas propias de esa región.`,
+    "Incluí los marketplaces y tiendas relevantes de la región, en particular",
+    "MercadoLibre, Amazon y las tiendas oficiales/retailers locales; buscá también",
+    "listings de MercadoLibre (mercadolibre.com y sus dominios por país).",
     "Devolvé las mejores ofertas que encuentres como arreglo JSON.",
   ].join("\n");
 }
