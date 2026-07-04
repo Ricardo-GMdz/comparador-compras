@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { supplierKey } from "./store.js";
-import type { SupplierCandidate } from "../domain/supplier.js";
+import { supplierKey, mergeSuppliers } from "./store.js";
+import type { SupplierCandidate, Supplier } from "../domain/supplier.js";
 
 function candidate(overrides: Partial<SupplierCandidate> = {}): SupplierCandidate {
   return {
@@ -30,5 +30,47 @@ describe("supplierKey", () => {
     const a = supplierKey(candidate({ region: "mx" }));
     const b = supplierKey(candidate({ region: "ar" }));
     expect(a).not.toBe(b);
+  });
+});
+
+const NOW = "2026-07-01T10:00:00.000Z";
+const BEFORE = "2026-06-01T10:00:00.000Z";
+
+describe("mergeSuppliers", () => {
+  it("agrega un proveedor nuevo con firstSeen y lastSeen = now", () => {
+    const result = mergeSuppliers([], [candidate({ website: "https://a.com" })], NOW);
+    expect(result.added).toBe(1);
+    expect(result.suppliers).toHaveLength(1);
+    expect(result.suppliers[0]?.firstSeen).toBe(NOW);
+    expect(result.suppliers[0]?.lastSeen).toBe(NOW);
+  });
+
+  it("actualiza un proveedor existente conservando firstSeen y refrescando lastSeen", () => {
+    const existing: Supplier = {
+      ...candidate({ website: "https://a.com", wholesalePrice: 200 }),
+      firstSeen: BEFORE,
+      lastSeen: BEFORE,
+    };
+    const result = mergeSuppliers(
+      [existing],
+      [candidate({ website: "https://a.com", wholesalePrice: 180 })],
+      NOW,
+    );
+    expect(result.added).toBe(0);
+    expect(result.suppliers).toHaveLength(1);
+    expect(result.suppliers[0]?.wholesalePrice).toBe(180);
+    expect(result.suppliers[0]?.firstSeen).toBe(BEFORE);
+    expect(result.suppliers[0]?.lastSeen).toBe(NOW);
+  });
+
+  it("no muta el directorio existente", () => {
+    const existing: Supplier = {
+      ...candidate({ website: "https://a.com" }),
+      firstSeen: BEFORE,
+      lastSeen: BEFORE,
+    };
+    const snapshot = { ...existing };
+    mergeSuppliers([existing], [candidate({ website: "https://a.com", wholesalePrice: 1 })], NOW);
+    expect(existing).toEqual(snapshot);
   });
 });
