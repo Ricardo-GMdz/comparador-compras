@@ -48,6 +48,7 @@ export default tseslint.config(
         window: "readonly",
         fetch: "readonly",
         console: "readonly",
+        URL: "readonly",
       },
     },
   },

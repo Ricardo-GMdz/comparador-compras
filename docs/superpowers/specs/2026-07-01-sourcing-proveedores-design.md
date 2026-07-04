@@ -18,12 +18,14 @@ a quienes puedo contactar"), que se había acotado a comparación de retail.
 ## Alcance
 
 **Dentro:**
+
 - App web local: buscar desde el navegador, ver el directorio.
 - Agente de sourcing que encuentra proveedores y extrae su contacto.
 - Directorio persistente (archivo JSON) que crece/actualiza entre búsquedas.
 - Ranking del "mejor proveedor".
 
 **Fuera (por ahora):**
+
 - Que el agente **envíe** mensajes/emails (solo reúne datos de contacto).
 - El MOQ como factor de ranking (se muestra como dato, no ordena).
 - SQLite / base de datos (usamos JSON; se puede migrar después).
@@ -64,16 +66,16 @@ interface SupplierContact {
 interface Supplier {
   name: string;
   website?: string;
-  material: string;            // producto/material que provee
+  material: string; // producto/material que provee
   region: string;
-  wholesalePrice?: number;     // precio de mayoreo por unidad
+  wholesalePrice?: number; // precio de mayoreo por unidad
   currency?: string;
-  moq?: number;                // mínimo de compra (informativo)
+  moq?: number; // mínimo de compra (informativo)
   contact: SupplierContact;
-  trusted: boolean;            // empresa verificada vs desconocida
+  trusted: boolean; // empresa verificada vs desconocida
   notes?: string;
-  firstSeen: string;           // ISO — alta en el directorio
-  lastSeen: string;            // ISO — última vez visto/actualizado
+  firstSeen: string; // ISO — alta en el directorio
+  lastSeen: string; // ISO — última vez visto/actualizado
 }
 ```
 
@@ -84,6 +86,7 @@ cadena de fallback como en el ranking de retail. Primero se descartan los
 **outliers de precio** (un mayoreo sospechosamente bajo no se recomienda).
 
 Elección de la mejor opción, en orden de preferencia:
+
 1. **Confiable + en la región del usuario**, la de **menor precio de mayoreo**.
 2. Si no hay: **confiable** (cualquier región), la de menor precio.
 3. Si no hay: **en la región** (aunque no verificada), la de menor precio.
@@ -118,7 +121,7 @@ que el usuario contacte por su cuenta.
 - `sourcing/supplierSource.ts` — agente que busca proveedores y extrae contacto
   (web_search); parseo defensivo con zod.
 - `ranking/rankSuppliers.ts` — elegir el mejor + ordenar (precio + confiabilidad
-  + cercanía; outliers).
+  - cercanía; outliers).
 - `server/app.ts` — Hono: rutas de UI estática + API.
 - `web/` — `index.html`, `styles.css`, `app.js` (la maqueta aprobada).
 

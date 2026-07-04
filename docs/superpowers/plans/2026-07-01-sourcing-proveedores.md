@@ -59,6 +59,7 @@ export interface Supplier extends SupplierCandidate {
 ## Task 1: Dependencias del servidor
 
 **Files:**
+
 - Modify: `package.json`
 
 - [ ] **Step 1: Instalar Hono y el adaptador de Node**
@@ -91,6 +92,7 @@ rtk git add package.json pnpm-lock.yaml && rtk git commit -m "chore: agregar Hon
 ## Task 2: Tipos de dominio del proveedor
 
 **Files:**
+
 - Create: `src/domain/supplier.ts`
 
 - [ ] **Step 1: Escribir los tipos**
@@ -151,6 +153,7 @@ rtk git add src/domain/supplier.ts && rtk git commit -m "feat: tipos de dominio 
 La identidad de un proveedor en el directorio es el **dominio del sitio** (si hay); si falta, **nombre normalizado + región**. Así dos búsquedas que traen el mismo proveedor se fusionan.
 
 **Files:**
+
 - Create: `src/directory/store.ts`
 - Test: `src/directory/store.test.ts`
 
@@ -250,6 +253,7 @@ rtk git add src/directory/store.ts src/directory/store.test.ts && rtk git commit
 Fusiona candidatos nuevos con el directorio existente. Un candidato con clave ya presente **actualiza** el proveedor (nuevos datos + `lastSeen`), conservando su `firstSeen`. Uno nuevo se agrega con `firstSeen = lastSeen = now`. Devuelve el directorio nuevo y cuántos se agregaron.
 
 **Files:**
+
 - Modify: `src/directory/store.ts`
 - Test: `src/directory/store.test.ts`
 
@@ -278,7 +282,11 @@ describe("mergeSuppliers", () => {
       firstSeen: BEFORE,
       lastSeen: BEFORE,
     };
-    const result = mergeSuppliers([existing], [candidate({ website: "https://a.com", wholesalePrice: 180 })], NOW);
+    const result = mergeSuppliers(
+      [existing],
+      [candidate({ website: "https://a.com", wholesalePrice: 180 })],
+      NOW,
+    );
     expect(result.added).toBe(0);
     expect(result.suppliers).toHaveLength(1);
     expect(result.suppliers[0]?.wholesalePrice).toBe(180);
@@ -287,7 +295,11 @@ describe("mergeSuppliers", () => {
   });
 
   it("no muta el directorio existente", () => {
-    const existing: Supplier = { ...candidate({ website: "https://a.com" }), firstSeen: BEFORE, lastSeen: BEFORE };
+    const existing: Supplier = {
+      ...candidate({ website: "https://a.com" }),
+      firstSeen: BEFORE,
+      lastSeen: BEFORE,
+    };
     const snapshot = { ...existing };
     mergeSuppliers([existing], [candidate({ website: "https://a.com", wholesalePrice: 1 })], NOW);
     expect(existing).toEqual(snapshot);
@@ -360,6 +372,7 @@ rtk git add src/directory/store.ts src/directory/store.test.ts && rtk git commit
 Carga y guarda `directorio.json`. Si el archivo no existe, el directorio arranca vacío. La escritura es atómica (temp + rename) para no corromper el archivo.
 
 **Files:**
+
 - Modify: `src/directory/store.ts`
 - Test: `src/directory/store.test.ts`
 
@@ -471,6 +484,7 @@ rtk git add src/directory/store.ts src/directory/store.test.ts && rtk git commit
 Valida y mapea la respuesta JSON del modelo a `SupplierCandidate[]`. Nivel superior debe ser un arreglo; cada item se valida por separado (descartar el malformado y continuar). Descarta precios de mayoreo no positivos (los deja como `undefined`, no descarta el proveedor — un proveedor sin precio sigue siendo útil).
 
 **Files:**
+
 - Create: `src/sourcing/supplierSchema.ts`
 - Test: `src/sourcing/supplierSchema.test.ts`
 
@@ -646,6 +660,7 @@ rtk git add src/sourcing/supplierSchema.ts src/sourcing/supplierSchema.test.ts &
 Consulta el modelo con `web_search` pidiendo proveedores B2B + contacto, y mapea con `parseSuppliers`. El cliente Anthropic es inyectable para testear sin red. Sigue el patrón de `src/sources/webSearchSource.ts` (adaptive thinking, tool `web_search`, manejo de `pause_turn`/errores).
 
 **Files:**
+
 - Create: `src/sourcing/supplierSource.ts`
 - Test: `src/sourcing/supplierSource.test.ts`
 
@@ -669,7 +684,15 @@ function fakeClient(text: string) {
 
 const RESPONSE = JSON.stringify({
   suppliers: [
-    { name: "Aceros del Norte", website: "https://aceros.mx", material: "lámina", wholesalePrice: 180, currency: "MXN", contact: { email: "v@aceros.mx" }, trusted: true },
+    {
+      name: "Aceros del Norte",
+      website: "https://aceros.mx",
+      material: "lámina",
+      wholesalePrice: 180,
+      currency: "MXN",
+      contact: { email: "v@aceros.mx" },
+      trusted: true,
+    },
   ],
 });
 
@@ -678,7 +701,11 @@ describe("createSupplierSource", () => {
     const source = createSupplierSource({ client: fakeClient(RESPONSE) });
     const result = await source.search({ query: "lámina galvanizada", region: "mx" });
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ name: "Aceros del Norte", region: "mx", wholesalePrice: 180 });
+    expect(result[0]).toMatchObject({
+      name: "Aceros del Norte",
+      region: "mx",
+      wholesalePrice: 180,
+    });
   });
 
   it("devuelve [] cuando el modelo no da texto utilizable", async () => {
@@ -696,7 +723,7 @@ Expected: FAIL — módulo no existe.
 
 - [ ] **Step 3: Implementación**
 
-```ts
+````ts
 // Fuente de proveedores basada en el server tool web_search del SDK de Anthropic.
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -779,13 +806,18 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
       max_tokens: MAX_TOKENS,
       thinking: { type: "adaptive" },
       system: buildSystemPrompt(),
-      tools: [{ type: WEB_SEARCH_TOOL_TYPE, name: WEB_SEARCH_TOOL_NAME, max_uses: MAX_WEB_SEARCH_USES }],
+      tools: [
+        { type: WEB_SEARCH_TOOL_TYPE, name: WEB_SEARCH_TOOL_NAME, max_uses: MAX_WEB_SEARCH_USES },
+      ],
       messages: [{ role: "user", content: buildUserPrompt(q) }],
     });
 
     const text = extractText(response.content);
     if (text.length === 0) {
-      logger.warn("sourcing: el modelo no devolvió texto utilizable", { query: q.query, region: q.region });
+      logger.warn("sourcing: el modelo no devolvió texto utilizable", {
+        query: q.query,
+        region: q.region,
+      });
       return [];
     }
     return parseSuppliers(parseJsonObject(text), q.region);
@@ -793,7 +825,7 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
 
   return { search };
 }
-```
+````
 
 Nota: el fake del test satisface la parte usada del cliente (`messages.create`) vía `as never`.
 
@@ -820,6 +852,7 @@ rtk git add src/sourcing/supplierSource.ts src/sourcing/supplierSource.test.ts &
 Ordena y elige la mejor opción por niveles (confiable + región + menor precio), descartando outliers de precio (mayoreo sospechosamente bajo). Espeja el estilo de `compareOffers` del retail.
 
 **Files:**
+
 - Create: `src/ranking/rankSuppliers.ts`
 - Test: `src/ranking/rankSuppliers.test.ts`
 
@@ -833,8 +866,14 @@ import type { Supplier } from "../domain/supplier.js";
 const NOW = "2026-07-01T00:00:00.000Z";
 function sup(o: Partial<Supplier>): Supplier {
   return {
-    name: "S", material: "lámina", region: "mx", contact: {}, trusted: true,
-    firstSeen: NOW, lastSeen: NOW, ...o,
+    name: "S",
+    material: "lámina",
+    region: "mx",
+    contact: {},
+    trusted: true,
+    firstSeen: NOW,
+    lastSeen: NOW,
+    ...o,
   };
 }
 
@@ -922,7 +961,8 @@ function makeIsOutlier(suppliers: readonly Supplier[]): (s: Supplier) => boolean
   if (withPrice.length < PRICE_OUTLIER_MIN_SAMPLE || median === undefined) {
     return () => false;
   }
-  return (s) => s.wholesalePrice !== undefined && s.wholesalePrice < median * PRICE_OUTLIER_MIN_RATIO;
+  return (s) =>
+    s.wholesalePrice !== undefined && s.wholesalePrice < median * PRICE_OUTLIER_MIN_RATIO;
 }
 
 function byPriceAsc(a: Supplier, b: Supplier): number {
@@ -944,7 +984,10 @@ export function rankSuppliers(suppliers: readonly Supplier[], region: string): r
  * Elige la mejor opción por niveles (descarta outliers de precio):
  * 1) confiable + en región, más barato; 2) confiable; 3) en región; 4) el más barato.
  */
-export function selectBestSupplier(suppliers: readonly Supplier[], region: string): Supplier | undefined {
+export function selectBestSupplier(
+  suppliers: readonly Supplier[],
+  region: string,
+): Supplier | undefined {
   const inRegion = region.trim().toLowerCase();
   const isOutlier = makeIsOutlier(suppliers);
   const eligible = suppliers.filter((s) => !isOutlier(s));
@@ -979,6 +1022,7 @@ rtk git add src/ranking/rankSuppliers.ts src/ranking/rankSuppliers.test.ts && rt
 App Hono con las dos rutas, con dependencias inyectadas (fuente, funciones de store) para testear sin red ni archivos.
 
 **Files:**
+
 - Create: `src/server/api.ts`
 - Test: `src/server/api.test.ts`
 
@@ -995,11 +1039,23 @@ function fakeDeps(existing: Supplier[] = []) {
   return {
     store,
     deps: {
-      source: { search: vi.fn(async () => [
-        { name: "Aceros", website: "https://a.mx", material: "lámina", region: "mx", trusted: true, contact: {}, wholesalePrice: 180 },
-      ]) },
+      source: {
+        search: vi.fn(async () => [
+          {
+            name: "Aceros",
+            website: "https://a.mx",
+            material: "lámina",
+            region: "mx",
+            trusted: true,
+            contact: {},
+            wholesalePrice: 180,
+          },
+        ]),
+      },
       loadDirectory: vi.fn(async () => store.current),
-      saveDirectory: vi.fn(async (_p: string, s: readonly Supplier[]) => { store.current = s; }),
+      saveDirectory: vi.fn(async (_p: string, s: readonly Supplier[]) => {
+        store.current = s;
+      }),
       now: () => NOW,
       directoryPath: "/tmp/x.json",
     },
@@ -1008,7 +1064,17 @@ function fakeDeps(existing: Supplier[] = []) {
 
 describe("API", () => {
   it("GET /api/directorio devuelve el directorio actual", async () => {
-    const { deps } = fakeDeps([{ name: "X", material: "y", region: "mx", trusted: true, contact: {}, firstSeen: NOW, lastSeen: NOW }]);
+    const { deps } = fakeDeps([
+      {
+        name: "X",
+        material: "y",
+        region: "mx",
+        trusted: true,
+        contact: {},
+        firstSeen: NOW,
+        lastSeen: NOW,
+      },
+    ]);
     const app = buildApi(deps);
     const res = await app.request("/api/directorio");
     expect(res.status).toBe(200);
@@ -1149,6 +1215,7 @@ rtk git add src/server/api.ts src/server/api.test.ts && rtk git commit -m "feat:
 Página estática que consume la API. Reproduce el diseño aprobado (indigo→violeta, chips, pills, mejor opción destacada + tabla).
 
 **Files:**
+
 - Create: `web/index.html`
 - Create: `web/styles.css`
 - Create: `web/app.js`
@@ -1168,7 +1235,9 @@ Página estática que consume la API. Reproduce el diseño aprobado (indigo→vi
     <main class="wrap">
       <header class="topbar">
         <div class="brand"><span class="logo">⌁</span> Proveedores</div>
-        <div class="counters"><span id="total" class="chip chip-indigo">0 en el directorio</span></div>
+        <div class="counters">
+          <span id="total" class="chip chip-indigo">0 en el directorio</span>
+        </div>
       </header>
 
       <form id="buscar" class="search">
@@ -1189,34 +1258,186 @@ Página estática que consume la API. Reproduce el diseño aprobado (indigo→vi
 - [ ] **Step 2: `web/styles.css`** (minimalista, acento indigo→violeta)
 
 ```css
-:root { --indigo:#4f46e5; --violet:#7c3aed; --ink:#1f1b30; --muted:#8b889e; --line:#ececf3; }
-* { box-sizing: border-box; }
-body { margin:0; font-family:system-ui,-apple-system,"Inter",sans-serif; color:var(--ink); background:#faf9fe; }
-.wrap { max-width:960px; margin:0 auto; padding:28px 20px; }
-.topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
-.brand { display:flex; align-items:center; gap:10px; font-weight:700; }
-.logo { width:30px; height:30px; border-radius:8px; background:linear-gradient(135deg,var(--indigo),var(--violet)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; }
-.chip { font-size:12px; font-weight:600; padding:5px 11px; border-radius:999px; }
-.chip-indigo { background:#efeefe; color:var(--indigo); }
-.chip-green { background:#e9f9ef; color:#16a34a; }
-.chip-amber { background:#fef3e2; color:#b45309; }
-.search { display:flex; gap:10px; margin-bottom:22px; }
-.input { flex:1; background:#fff; border:1px solid #e6e6f0; border-radius:12px; padding:12px 15px; font-size:14px; }
-.input.region { flex:0 0 90px; }
-.btn { background:linear-gradient(135deg,var(--indigo),#6d5cf0); color:#fff; border:0; border-radius:12px; padding:12px 22px; font-weight:600; cursor:pointer; }
-.best { position:relative; background:#fff; border:1px solid #e6e6f0; border-radius:14px; padding:18px 20px 18px 24px; margin-bottom:22px; overflow:hidden; box-shadow:0 4px 18px rgba(79,70,229,.07); }
-.best::before { content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:linear-gradient(180deg,var(--indigo),var(--violet)); }
-.best .badge { display:inline-block; background:#f3f1ff; color:var(--indigo); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; padding:4px 10px; border-radius:999px; }
-.best h3 { margin:9px 0 2px; font-size:19px; }
-.best .meta { color:var(--muted); font-size:13px; }
-.contacts { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
-.contacts a { text-decoration:none; background:#f4f4f8; color:var(--indigo); font-size:12px; padding:5px 10px; border-radius:8px; }
-table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; font-size:13px; }
-th { text-align:left; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; font-weight:600; padding:13px 16px; }
-td { padding:14px 16px; border-top:1px solid #f1f1f6; }
-.tag { background:#eef; color:var(--indigo); padding:3px 9px; border-radius:6px; font-size:12px; }
-.status { color:var(--muted); font-size:13px; margin-top:14px; }
-.hidden { display:none; }
+:root {
+  --indigo: #4f46e5;
+  --violet: #7c3aed;
+  --ink: #1f1b30;
+  --muted: #8b889e;
+  --line: #ececf3;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Inter",
+    sans-serif;
+  color: var(--ink);
+  background: #faf9fe;
+}
+.wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 28px 20px;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+.logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--indigo), var(--violet));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+}
+.chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 999px;
+}
+.chip-indigo {
+  background: #efeefe;
+  color: var(--indigo);
+}
+.chip-green {
+  background: #e9f9ef;
+  color: #16a34a;
+}
+.chip-amber {
+  background: #fef3e2;
+  color: #b45309;
+}
+.search {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.input {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #e6e6f0;
+  border-radius: 12px;
+  padding: 12px 15px;
+  font-size: 14px;
+}
+.input.region {
+  flex: 0 0 90px;
+}
+.btn {
+  background: linear-gradient(135deg, var(--indigo), #6d5cf0);
+  color: #fff;
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 22px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.best {
+  position: relative;
+  background: #fff;
+  border: 1px solid #e6e6f0;
+  border-radius: 14px;
+  padding: 18px 20px 18px 24px;
+  margin-bottom: 22px;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(79, 70, 229, 0.07);
+}
+.best::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: linear-gradient(180deg, var(--indigo), var(--violet));
+}
+.best .badge {
+  display: inline-block;
+  background: #f3f1ff;
+  color: var(--indigo);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.best h3 {
+  margin: 9px 0 2px;
+  font-size: 19px;
+}
+.best .meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+.contacts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.contacts a {
+  text-decoration: none;
+  background: #f4f4f8;
+  color: var(--indigo);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 8px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  font-size: 13px;
+}
+th {
+  text-align: left;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  padding: 13px 16px;
+}
+td {
+  padding: 14px 16px;
+  border-top: 1px solid #f1f1f6;
+}
+.tag {
+  background: #eef;
+  color: var(--indigo);
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.status {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 14px;
+}
+.hidden {
+  display: none;
+}
 ```
 
 - [ ] **Step 3: `web/app.js`** (fetch a la API + render)
@@ -1229,7 +1450,10 @@ function contactLinks(c) {
   if (c.website) items.push(`<a href="${c.website}" target="_blank">🌐 Web</a>`);
   if (c.email) items.push(`<a href="mailto:${c.email}">✉️ Email</a>`);
   if (c.phone) items.push(`<a href="tel:${c.phone}">📞 Tel</a>`);
-  if (c.whatsapp) items.push(`<a href="https://wa.me/${c.whatsapp.replace(/[^0-9]/g, "")}" target="_blank">💬 WhatsApp</a>`);
+  if (c.whatsapp)
+    items.push(
+      `<a href="https://wa.me/${c.whatsapp.replace(/[^0-9]/g, "")}" target="_blank">💬 WhatsApp</a>`,
+    );
   if (c.formUrl) items.push(`<a href="${c.formUrl}" target="_blank">📝 Formulario</a>`);
   return items.join("");
 }
@@ -1239,12 +1463,18 @@ function contactFor(s) {
 }
 
 function price(s) {
-  return s.wholesalePrice !== undefined ? `$${s.wholesalePrice}${s.currency ? " " + s.currency : ""}` : "—";
+  return s.wholesalePrice !== undefined
+    ? `$${s.wholesalePrice}${s.currency ? " " + s.currency : ""}`
+    : "—";
 }
 
 function renderBest(best) {
   const el = $("best");
-  if (!best) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  if (!best) {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return;
+  }
   el.classList.remove("hidden");
   el.innerHTML = `
     <span class="badge">★ Mejor opción</span>
@@ -1254,7 +1484,9 @@ function renderBest(best) {
 }
 
 function renderTable(suppliers) {
-  const rows = suppliers.map((s) => `
+  const rows = suppliers
+    .map(
+      (s) => `
     <tr>
       <td><strong>${s.name}</strong></td>
       <td><span class="tag">${s.material}</span></td>
@@ -1263,8 +1495,13 @@ function renderTable(suppliers) {
       <td>${s.region}</td>
       <td class="contacts">${contactFor(s)}</td>
       <td><span class="chip ${s.trusted ? "chip-green" : "chip-amber"}">${s.trusted ? "Confiable" : "Sin verificar"}</span></td>
-    </tr>`).join("");
-  $("tabla").innerHTML = suppliers.length === 0 ? "" : `
+    </tr>`,
+    )
+    .join("");
+  $("tabla").innerHTML =
+    suppliers.length === 0
+      ? ""
+      : `
     <table><thead><tr>
       <th>Proveedor</th><th>Material</th><th>Mayoreo</th><th>Mín.</th><th>Región</th><th>Contacto</th><th>Estado</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
@@ -1296,7 +1533,10 @@ $("buscar").addEventListener("submit", async (e) => {
       body: JSON.stringify({ query, region }),
     });
     const data = await res.json();
-    if (!data.ok) { $("status").textContent = data.error ?? "Error en la búsqueda."; return; }
+    if (!data.ok) {
+      $("status").textContent = data.error ?? "Error en la búsqueda.";
+      return;
+    }
     render(data);
     $("status").textContent = `${data.nuevos} nuevos · ${data.total} en total`;
   } catch {
@@ -1320,6 +1560,7 @@ rtk git add web/ && rtk git commit -m "feat: frontend del directorio (maqueta ap
 Arma las dependencias reales (cliente Anthropic desde env, funciones de store, path del directorio) y sirve la API + los archivos de `web/`.
 
 **Files:**
+
 - Create: `src/server/index.ts`
 - Modify: `.gitignore` (agregar `directorio.json`)
 
@@ -1385,6 +1626,7 @@ Con `ANTHROPIC_API_KEY` en `.env`:
 
 Run: `node dist/server/index.js`
 Luego abrir `http://localhost:8787`, buscar "láminas de metal galvanizadas" región `mx`, y confirmar:
+
 - Aparecen proveedores con contacto y mejor opción destacada.
 - El contador sube; una segunda búsqueda igual **no duplica** (merge).
 - Se crea/actualiza `directorio.json`.
