@@ -1,6 +1,6 @@
 // Directorio de proveedores: identidad, merge y persistencia en JSON.
 
-import type { Supplier, SupplierCandidate } from "../domain/supplier.js";
+import type { SupplierCandidate } from "../domain/supplier.js";
 
 /** Extrae el dominio (sin www) de una URL; undefined si no es válida. */
 function domainOf(website: string | undefined): string | undefined {
