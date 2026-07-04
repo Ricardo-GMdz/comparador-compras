@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Proveedores</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="topbar">
+        <div class="brand"><span class="logo">⌁</span> Proveedores</div>
+        <div class="counters"><span id="total" class="chip chip-indigo">0 en el directorio</span></div>
+      </header>
+
+      <form id="buscar" class="search">
+        <input id="query" class="input" placeholder="Ej. láminas de metal galvanizadas" />
+        <input id="region" class="input region" value="mx" />
+        <button class="btn" type="submit">Buscar</button>
+      </form>
+
+      <section id="best" class="best hidden"></section>
+      <section id="tabla"></section>
+      <p id="status" class="status"></p>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
