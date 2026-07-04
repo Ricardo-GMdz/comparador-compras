@@ -1,5 +1,7 @@
 // Directorio de proveedores: identidad, merge y persistencia en JSON.
 
+import { readFile, writeFile, rename } from "node:fs/promises";
+import { z } from "zod";
 import type { Supplier, SupplierCandidate } from "../domain/supplier.js";
 
 /** Extrae el dominio (sin www) de una URL; undefined si no es válida. */
@@ -62,4 +64,51 @@ export function mergeSuppliers(
   }
 
   return { suppliers: [...byKey.values()], added };
+}
+
+// Esquema del archivo persistido: validamos al leer (dato de un archivo externo).
+const contactSchema = z.object({
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  whatsapp: z.string().optional(),
+  formUrl: z.string().optional(),
+});
+const supplierSchema = z.object({
+  name: z.string(),
+  website: z.string().optional(),
+  material: z.string(),
+  region: z.string(),
+  wholesalePrice: z.number().optional(),
+  currency: z.string().optional(),
+  moq: z.number().optional(),
+  contact: contactSchema,
+  trusted: z.boolean(),
+  notes: z.string().optional(),
+  firstSeen: z.string(),
+  lastSeen: z.string(),
+});
+const directorySchema = z.array(supplierSchema);
+
+/**
+ * Carga el directorio desde `path`. Si el archivo no existe, devuelve `[]`.
+ * Valida el contenido con zod (falla explícito si el archivo está corrupto).
+ */
+export async function loadDirectory(path: string): Promise<readonly Supplier[]> {
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+  return directorySchema.parse(JSON.parse(raw));
+}
+
+/** Guarda el directorio en `path` de forma atómica (escribe a temp y renombra). */
+export async function saveDirectory(path: string, suppliers: readonly Supplier[]): Promise<void> {
+  const tmp = `${path}.tmp`;
+  await writeFile(tmp, JSON.stringify(suppliers, null, 2), "utf8");
+  await rename(tmp, path);
 }

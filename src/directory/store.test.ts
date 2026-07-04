@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { supplierKey, mergeSuppliers } from "./store.js";
+import { supplierKey, mergeSuppliers, loadDirectory, saveDirectory } from "./store.js";
 import type { SupplierCandidate, Supplier } from "../domain/supplier.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 function candidate(overrides: Partial<SupplierCandidate> = {}): SupplierCandidate {
   return {
@@ -72,5 +75,25 @@ describe("mergeSuppliers", () => {
     const snapshot = { ...existing };
     mergeSuppliers([existing], [candidate({ website: "https://a.com", wholesalePrice: 1 })], NOW);
     expect(existing).toEqual(snapshot);
+  });
+});
+
+describe("loadDirectory / saveDirectory", () => {
+  it("devuelve un directorio vacío cuando el archivo no existe", async () => {
+    const path = join(tmpdir(), "no-existe-directorio.json");
+    const dir = await loadDirectory(path);
+    expect(dir).toEqual([]);
+  });
+
+  it("persiste y relee los proveedores (round-trip)", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "dir-"));
+    const path = join(tmp, "directorio.json");
+    const suppliers: Supplier[] = [
+      { ...candidate({ website: "https://a.com" }), firstSeen: NOW, lastSeen: NOW },
+    ];
+    await saveDirectory(path, suppliers);
+    const reloaded = await loadDirectory(path);
+    expect(reloaded).toEqual(suppliers);
+    rmSync(tmp, { recursive: true, force: true });
   });
 });
