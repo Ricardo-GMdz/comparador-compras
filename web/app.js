@@ -5,7 +5,10 @@ function contactLinks(c) {
   if (c.website) items.push(`<a href="${c.website}" target="_blank">🌐 Web</a>`);
   if (c.email) items.push(`<a href="mailto:${c.email}">✉️ Email</a>`);
   if (c.phone) items.push(`<a href="tel:${c.phone}">📞 Tel</a>`);
-  if (c.whatsapp) items.push(`<a href="https://wa.me/${c.whatsapp.replace(/[^0-9]/g, "")}" target="_blank">💬 WhatsApp</a>`);
+  if (c.whatsapp)
+    items.push(
+      `<a href="https://wa.me/${c.whatsapp.replace(/[^0-9]/g, "")}" target="_blank">💬 WhatsApp</a>`,
+    );
   if (c.formUrl) items.push(`<a href="${c.formUrl}" target="_blank">📝 Formulario</a>`);
   return items.join("");
 }
@@ -15,12 +18,18 @@ function contactFor(s) {
 }
 
 function price(s) {
-  return s.wholesalePrice !== undefined ? `$${s.wholesalePrice}${s.currency ? " " + s.currency : ""}` : "—";
+  return s.wholesalePrice !== undefined
+    ? `$${s.wholesalePrice}${s.currency ? " " + s.currency : ""}`
+    : "—";
 }
 
 function renderBest(best) {
   const el = $("best");
-  if (!best) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  if (!best) {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return;
+  }
   el.classList.remove("hidden");
   el.innerHTML = `
     <span class="badge">★ Mejor opción</span>
@@ -30,7 +39,9 @@ function renderBest(best) {
 }
 
 function renderTable(suppliers) {
-  const rows = suppliers.map((s) => `
+  const rows = suppliers
+    .map(
+      (s) => `
     <tr>
       <td><strong>${s.name}</strong></td>
       <td><span class="tag">${s.material}</span></td>
@@ -39,8 +50,13 @@ function renderTable(suppliers) {
       <td>${s.region}</td>
       <td class="contacts">${contactFor(s)}</td>
       <td><span class="chip ${s.trusted ? "chip-green" : "chip-amber"}">${s.trusted ? "Confiable" : "Sin verificar"}</span></td>
-    </tr>`).join("");
-  $("tabla").innerHTML = suppliers.length === 0 ? "" : `
+    </tr>`,
+    )
+    .join("");
+  $("tabla").innerHTML =
+    suppliers.length === 0
+      ? ""
+      : `
     <table><thead><tr>
       <th>Proveedor</th><th>Material</th><th>Mayoreo</th><th>Mín.</th><th>Región</th><th>Contacto</th><th>Estado</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
@@ -72,7 +88,10 @@ $("buscar").addEventListener("submit", async (e) => {
       body: JSON.stringify({ query, region }),
     });
     const data = await res.json();
-    if (!data.ok) { $("status").textContent = data.error ?? "Error en la búsqueda."; return; }
+    if (!data.ok) {
+      $("status").textContent = data.error ?? "Error en la búsqueda.";
+      return;
+    }
     render(data);
     $("status").textContent = `${data.nuevos} nuevos · ${data.total} en total`;
   } catch {

@@ -36,6 +36,21 @@ export default tseslint.config(
       "no-console": "off",
     },
   },
+  {
+    // El frontend vanilla corre en el navegador: declarar sus globals para
+    // que ESLint no marque falsos no-undef (document, fetch, window, etc.).
+    files: ["web/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "script",
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        fetch: "readonly",
+        console: "readonly",
+      },
+    },
+  },
   // Debe ir último: desactiva reglas de formato que maneja Prettier.
   prettier,
 );
