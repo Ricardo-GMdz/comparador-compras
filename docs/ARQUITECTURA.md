@@ -1,8 +1,21 @@
 # Arquitectura — comparador-compras
 
-CLI agente que, dado un producto, busca información y ofertas en internet, compara
-precios entre proveedores, recomienda la mejor opción y sugiere upgrades dentro de
-un rango de precio similar.
+El proyecto tiene dos capacidades:
+
+- **v2 — Sourcing de proveedores (foco actual):** app web local que, dada una
+  búsqueda (producto/material + región), encuentra **proveedores B2B**, reúne sus
+  **datos de contacto**, los acumula en un **directorio persistente** y recomienda
+  la **mejor opción**. En implementación según
+  `docs/superpowers/plans/2026-07-01-sourcing-proveedores.md`.
+- **v1 — Comparación de retail (motor de fondo, reusado):** CLI que compara
+  **ofertas de retail** de un producto (mejor opción, upgrade por variante,
+  condición nuevo/reacondicionado, outliers, dedup multi-fuente). Su motor
+  (cliente Claude + `web_search`, parseo defensivo con zod, ranking, outliers) se
+  reusa en el v2.
+
+> Nota externa: la API de búsqueda de MercadoLibre está **cerrada** para apps
+> generales (403 aun con token OAuth válido). La cobertura de ML se logra vía
+> `web_search`. Existe un adaptador `mercadoLibreSource` opt-in deshabilitado.
 
 ## Principios
 
@@ -10,149 +23,104 @@ un rango de precio similar.
 - **Errores explícitos**: se manejan en cada nivel; nunca se tragan en silencio.
   Validación en los límites (entrada del usuario, respuestas externas) con `zod`.
 - **Archivos chicos y cohesivos**: 200-400 líneas típico, 800 máx.
-- **Multi-región**: la región es un parámetro (`--region`) que condiciona moneda y
-  tiendas. No se hardcodea ningún país; el default es `"global"`.
+- **Multi-región**: la región es un parámetro que condiciona moneda, tiendas y
+  cercanía. No se hardcodea ningún país; el default es `"global"`.
 - **Naming**: `camelCase` (vars/funcs, con `is/has/should/can` para booleanos),
   `PascalCase` (tipos/interfaces), `UPPER_SNAKE_CASE` (constantes). Identificadores
   en inglés; comentarios en español.
+- **TDD**: test primero (rojo) → implementación mínima (verde) → refactor.
 
 ## Stack
 
 - TypeScript + Node, ESM (`"type": "module"`), package manager `pnpm`.
-- Tooling: `vitest` (tests), `eslint` + `prettier`, `tsconfig` strict.
-- SDK: `@anthropic-ai/sdk`, modelo `claude-opus-4-8`, adaptive thinking
-  (`thinking: { type: "adaptive" }`). El agente usa tool use con el server tool
-  `web_search` (type `"web_search_20260209"`, name `"web_search"`).
-- Config: validación de entorno con `zod`. CLI con `commander`.
-- CI: GitHub Actions (lint + typecheck + test).
+- Tooling: `vitest` (tests), `eslint` + `prettier`, `tsconfig` strict, CI en
+  GitHub Actions (lint + typecheck + test).
+- SDK: `@anthropic-ai/sdk`, modelo `claude-opus-4-8`, adaptive thinking; server
+  tool `web_search` (`"web_search_20260209"`).
+- Config de entorno con `zod` (`ANTHROPIC_API_KEY`); carga de `.env` nativa
+  (`process.loadEnvFile`).
+- **v2:** servidor **Hono** (+ `@hono/node-server`) sirve la API JSON y el
+  frontend estático (**HTML/CSS/JS vanilla**). Store en **`directorio.json`**
+  (gitignoreado). **v1:** CLI con `commander`.
 
-## Flujo del primer slice vertical (end-to-end)
+## v2 — Sourcing de proveedores
 
-```
-comparar "<producto>" --region <code>
-  -> loadEnv()                      (valida ANTHROPIC_API_KEY con zod, falla rápido)
-  -> createWebSearchSource({ apiKey })
-  -> runComparison({ query, region, sources })
-       -> source.search(product)   (web_search via @anthropic-ai/sdk)
-       -> compareOffers(product, offers)
-            -> normalizePrice / rankOffers
-  -> ComparisonResult (>= 1 oferta normalizada)
-  -> render de tabla en consola
-```
-
-## Módulos y contratos públicos
-
-Estos contratos son la fuente de verdad. Las rutas y firmas son exactas; todos los
-módulos deben encajar con ellos.
-
-### `src/domain/types.ts`
-
-```ts
-export interface Provider {
-  name: string;
-  url?: string;
-  trusted: boolean;
-}
-export interface Offer {
-  productTitle: string;
-  provider: Provider;
-  priceAmount: number;
-  currency: string;
-  region: string;
-  url?: string;
-  raw?: string;
-}
-export interface Product {
-  query: string;
-  region: string;
-}
-export interface ComparisonResult {
-  product: Product;
-  offers: readonly Offer[];
-  best?: Offer;
-  upgradeSuggestion?: Offer;
-  notes?: string;
-}
-```
-
-### `src/domain/source.ts`
-
-```ts
-import type { Product, Offer } from "./types.js";
-export interface ProductSource {
-  readonly id: string;
-  search(product: Product): Promise<readonly Offer[]>;
-}
-```
-
-### `src/config/env.ts`
-
-```ts
-export interface Env {
-  anthropicApiKey: string;
-}
-export function loadEnv(): Env; // valida con zod, falla rápido
-```
-
-### `src/logging/logger.ts`
-
-```ts
-export const logger; // logger estructurado simple: info/warn/error
-```
-
-### `src/sources/webSearchSource.ts`
-
-```ts
-export function createWebSearchSource(deps: { apiKey: string }): ProductSource;
-// id "web-search"; usa @anthropic-ai/sdk con web_search
-```
-
-### `src/compare/index.ts`
-
-```ts
-export function normalizePrice(offer: Offer): Offer;
-export function rankOffers(offers: readonly Offer[]): readonly Offer[];
-export function compareOffers(product: Product, offers: readonly Offer[]): ComparisonResult;
-```
-
-### `src/agent/runner.ts`
-
-```ts
-export function runComparison(input: {
-  query: string;
-  region: string;
-  sources: readonly ProductSource[];
-}): Promise<ComparisonResult>;
-```
-
-### `src/cli/index.ts`
-
-```ts
-export function buildProgram(): import("commander").Command;
-// comando "comparar <producto>" con opción --region, default "global"
-```
-
-### `src/index.ts`
-
-Bin entry: parsea `argv` y ejecuta el program.
-
-## Diagrama de dependencias (alto nivel)
+### Flujo end-to-end
 
 ```
-index.ts
-  └─ cli/index.ts (buildProgram)
-       └─ agent/runner.ts (runComparison)
-            ├─ domain/source.ts (ProductSource)
-            │    └─ sources/webSearchSource.ts (createWebSearchSource)
-            │         └─ config/env.ts (loadEnv) + @anthropic-ai/sdk
-            └─ compare/index.ts (compareOffers, rankOffers, normalizePrice)
-  (transversal) logging/logger.ts
-  (transversal) domain/types.ts
+navegador  Buscar(producto/material, región)
+  -> POST /api/buscar
+       -> createSupplierSource(...).search({ query, region })   (Claude + web_search)
+       -> parseSuppliers(...)                                    (zod, defensivo)
+       -> loadDirectory(directorio.json)
+       -> mergeSuppliers(existentes, nuevos, now)                (merge por identidad)
+       -> saveDirectory(...)                                     (escritura atómica)
+       -> rankSuppliers / selectBestSupplier                     (niveles + outliers)
+  <- { suppliers, mejorOpcion, nuevos, total }
+navegador  <- pinta mejor opción destacada + tabla del directorio
 ```
 
-## Estado de los cimientos
+### Módulos y contratos (v2)
 
-Este andamiaje crea la configuración del proyecto (package.json, tsconfig, eslint,
-prettier, vitest, CI, .env.example) y los contratos de dominio (`types.ts`,
-`source.ts`). Los módulos `config`, `logging`, `sources`, `compare`, `agent` y `cli`
-los implementan otros agentes respetando los contratos de arriba.
+- `src/domain/supplier.ts` — `SupplierContact`, `SupplierCandidate` (lo que produce
+  el sourcing) y `Supplier` (candidate + `firstSeen`/`lastSeen`).
+- `src/directory/store.ts` — `supplierKey` (identidad por dominio del sitio, o
+  nombre+región), `mergeSuppliers` (merge inmutable con timestamps), `loadDirectory`
+  / `saveDirectory` (persistencia JSON validada con zod, escritura atómica).
+- `src/sourcing/supplierSchema.ts` — `parseSuppliers` (respuesta del modelo →
+  `SupplierCandidate[]`, parseo defensivo por item).
+- `src/sourcing/supplierSource.ts` — `createSupplierSource({ client })` (agente
+  `web_search` orientado a proveedores B2B + extracción de contacto).
+- `src/ranking/rankSuppliers.ts` — `rankSuppliers` (orden) y `selectBestSupplier`
+  (mejor por niveles: confiable + región + menor precio de mayoreo; descarta
+  outliers). El MOQ es dato, no ordena.
+- `src/server/api.ts` — `buildApi(deps)` → app Hono con `POST /api/buscar` y
+  `GET /api/directorio` (dependencias inyectables para test).
+- `src/server/index.ts` — entry: arma dependencias reales (cliente Anthropic desde
+  env, funciones de store) y sirve API + estáticos de `web/`.
+- `web/` — `index.html`, `styles.css`, `app.js` (la interfaz aprobada, vanilla).
+
+### Ranking del mejor proveedor (por niveles)
+
+Primero se descartan outliers de precio de mayoreo. Luego, en orden:
+
+1. confiable + en la región del usuario, más barato;
+2. confiable (cualquier región), más barato;
+3. en la región (aunque no verificado), más barato;
+4. el más barato disponible.
+
+### Directorio persistente
+
+`directorio.json` es la fuente de verdad. Cada búsqueda **agrega o actualiza**
+proveedores por identidad (dominio del sitio; si falta, nombre+región), conservando
+`firstSeen` y refrescando `lastSeen`. El contador "N en total · +M nuevos" sale del
+merge.
+
+## v1 — Motor de retail (reusado, de fondo)
+
+CLI `comparar "<producto>" --region <code>`. Módulos existentes que se reusan o
+quedan intactos:
+
+- `domain/types.ts` (`Offer`, `Provider`, `Product`, `ComparisonResult`).
+- `config/env.ts` (`loadEnv`), `config/loadDotenv.ts`, `logging/logger.ts`.
+- `sources/webSearchSource.ts` (patrón de cliente Claude + `web_search`),
+  `sources/mercadoLibreSource.ts` (opt-in deshabilitado).
+- `compare/index.ts` (`normalizePrice`, `rankOffers`, `compareOffers`: mejor
+  opción, upgrade por `tierRank`, condición, outliers).
+- `agent/runner.ts` (`runComparison`) + `agent/dedupe.ts` (dedup multi-fuente).
+- `cli/index.ts` (`buildProgram`) + `index.ts` (bin).
+
+El logger separa salidas: el **resultado va a stdout**, los **logs a stderr**.
+
+## Diagrama de dependencias (v2, alto nivel)
+
+```
+web/ (index.html, styles.css, app.js)
+  └─ fetch → server/api.ts (buildApi)
+       ├─ sourcing/supplierSource.ts (createSupplierSource)
+       │    └─ sourcing/supplierSchema.ts (parseSuppliers) + @anthropic-ai/sdk
+       ├─ directory/store.ts (load/merge/save)
+       └─ ranking/rankSuppliers.ts (rankSuppliers, selectBestSupplier)
+  server/index.ts (entry) → serve(api) + estáticos web/
+  (transversal) domain/supplier.ts, config/env.ts, logging/logger.ts
+```

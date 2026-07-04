@@ -1,15 +1,35 @@
 const $ = (id) => document.getElementById(id);
 
+// Los datos del proveedor vienen del modelo/web_search (fuente externa no
+// confiable): se escapan antes de inyectarlos en innerHTML para evitar XSS.
+function esc(value) {
+  const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => map[ch]);
+}
+
+// Devuelve la URL solo si es http/https absoluta; si no, null (no se renderiza el
+// link). Evita esquemas peligrosos como javascript: en website/formUrl.
+function httpUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
 function contactLinks(c) {
   const items = [];
-  if (c.website) items.push(`<a href="${c.website}" target="_blank">🌐 Web</a>`);
-  if (c.email) items.push(`<a href="mailto:${c.email}">✉️ Email</a>`);
-  if (c.phone) items.push(`<a href="tel:${c.phone}">📞 Tel</a>`);
+  const web = httpUrl(c.website);
+  if (web) items.push(`<a href="${esc(web)}" target="_blank" rel="noopener">🌐 Web</a>`);
+  if (c.email) items.push(`<a href="mailto:${esc(c.email)}">✉️ Email</a>`);
+  if (c.phone) items.push(`<a href="tel:${esc(c.phone)}">📞 Tel</a>`);
   if (c.whatsapp)
     items.push(
-      `<a href="https://wa.me/${c.whatsapp.replace(/[^0-9]/g, "")}" target="_blank">💬 WhatsApp</a>`,
+      `<a href="https://wa.me/${c.whatsapp.replace(/[^0-9]/g, "")}" target="_blank" rel="noopener">💬 WhatsApp</a>`,
     );
-  if (c.formUrl) items.push(`<a href="${c.formUrl}" target="_blank">📝 Formulario</a>`);
+  const form = httpUrl(c.formUrl);
+  if (form) items.push(`<a href="${esc(form)}" target="_blank" rel="noopener">📝 Formulario</a>`);
   return items.join("");
 }
 
@@ -19,7 +39,7 @@ function contactFor(s) {
 
 function price(s) {
   return s.wholesalePrice !== undefined
-    ? `$${s.wholesalePrice}${s.currency ? " " + s.currency : ""}`
+    ? `$${esc(s.wholesalePrice)}${s.currency ? " " + esc(s.currency) : ""}`
     : "—";
 }
 
@@ -33,8 +53,8 @@ function renderBest(best) {
   el.classList.remove("hidden");
   el.innerHTML = `
     <span class="badge">★ Mejor opción</span>
-    <h3>${best.name}</h3>
-    <div class="meta">${best.material} · ${best.region} · ${price(best)}${best.moq ? " · mín. " + best.moq : ""}</div>
+    <h3>${esc(best.name)}</h3>
+    <div class="meta">${esc(best.material)} · ${esc(best.region)} · ${price(best)}${best.moq !== undefined ? " · mín. " + esc(best.moq) : ""}</div>
     <div class="contacts">${contactFor(best)}</div>`;
 }
 
@@ -43,11 +63,11 @@ function renderTable(suppliers) {
     .map(
       (s) => `
     <tr>
-      <td><strong>${s.name}</strong></td>
-      <td><span class="tag">${s.material}</span></td>
+      <td><strong>${esc(s.name)}</strong></td>
+      <td><span class="tag">${esc(s.material)}</span></td>
       <td>${price(s)}</td>
-      <td>${s.moq ?? "—"}</td>
-      <td>${s.region}</td>
+      <td>${s.moq !== undefined ? esc(s.moq) : "—"}</td>
+      <td>${esc(s.region)}</td>
       <td class="contacts">${contactFor(s)}</td>
       <td><span class="chip ${s.trusted ? "chip-green" : "chip-amber"}">${s.trusted ? "Confiable" : "Sin verificar"}</span></td>
     </tr>`,
