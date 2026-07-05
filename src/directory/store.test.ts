@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { supplierKey, mergeSuppliers, loadDirectory, saveDirectory } from "./store.js";
+import {
+  supplierKey,
+  mergeSuppliers,
+  updateSupplier,
+  removeSupplier,
+  loadDirectory,
+  saveDirectory,
+} from "./store.js";
 import type { SupplierCandidate, Supplier } from "../domain/supplier.js";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -99,6 +106,104 @@ describe("mergeSuppliers", () => {
     const snapshot = { ...existing };
     mergeSuppliers([existing], [candidate({ website: "https://a.com", wholesalePrice: 1 })], NOW);
     expect(existing).toEqual(snapshot);
+  });
+});
+
+describe("updateSupplier", () => {
+  function existingSupplier(overrides: Partial<Supplier> = {}): Supplier {
+    return {
+      ...candidate({ website: "https://a.com", wholesalePrice: 200 }),
+      status: "pendiente",
+      firstSeen: BEFORE,
+      lastSeen: BEFORE,
+      ...overrides,
+    };
+  }
+
+  it("actualiza status y notes por key, refresca lastSeen y conserva el resto", () => {
+    const supplier = existingSupplier();
+    const key = supplierKey(supplier);
+    const result = updateSupplier(
+      [supplier],
+      key,
+      { status: "contactado", notes: "les escribí" },
+      NOW,
+    );
+    expect(result).toBeDefined();
+    expect(result).toHaveLength(1);
+    expect(result?.[0]?.status).toBe("contactado");
+    expect(result?.[0]?.notes).toBe("les escribí");
+    expect(result?.[0]?.lastSeen).toBe(NOW);
+    // El resto de los campos quedan intactos.
+    expect(result?.[0]?.name).toBe(supplier.name);
+    expect(result?.[0]?.wholesalePrice).toBe(200);
+    expect(result?.[0]?.firstSeen).toBe(BEFORE);
+  });
+
+  it("aplica un patch parcial sin tocar los campos no incluidos", () => {
+    const supplier = existingSupplier({ notes: "nota previa" });
+    const result = updateSupplier([supplier], supplierKey(supplier), { status: "cotizó" }, NOW);
+    expect(result?.[0]?.status).toBe("cotizó");
+    expect(result?.[0]?.notes).toBe("nota previa");
+  });
+
+  it("devuelve undefined cuando la key no existe", () => {
+    const supplier = existingSupplier();
+    const result = updateSupplier([supplier], "d:no-existe.com", { status: "contactado" }, NOW);
+    expect(result).toBeUndefined();
+  });
+
+  it("no muta el directorio de entrada", () => {
+    const supplier = existingSupplier();
+    const suppliers = [supplier];
+    const snapshot = { ...supplier };
+    updateSupplier(suppliers, supplierKey(supplier), { status: "descartado" }, NOW);
+    expect(supplier).toEqual(snapshot);
+    expect(suppliers).toHaveLength(1);
+  });
+});
+
+describe("removeSupplier", () => {
+  it("saca el proveedor correcto y deja los demás", () => {
+    const a: Supplier = {
+      ...candidate({ website: "https://a.com" }),
+      status: "pendiente",
+      firstSeen: BEFORE,
+      lastSeen: BEFORE,
+    };
+    const b: Supplier = {
+      ...candidate({ website: "https://b.com" }),
+      status: "pendiente",
+      firstSeen: BEFORE,
+      lastSeen: BEFORE,
+    };
+    const result = removeSupplier([a, b], supplierKey(a));
+    expect(result).toBeDefined();
+    expect(result).toHaveLength(1);
+    expect(result?.[0]?.website).toBe("https://b.com");
+  });
+
+  it("devuelve undefined cuando la key no existe", () => {
+    const a: Supplier = {
+      ...candidate({ website: "https://a.com" }),
+      status: "pendiente",
+      firstSeen: BEFORE,
+      lastSeen: BEFORE,
+    };
+    expect(removeSupplier([a], "d:no-existe.com")).toBeUndefined();
+  });
+
+  it("no muta el directorio de entrada", () => {
+    const a: Supplier = {
+      ...candidate({ website: "https://a.com" }),
+      status: "pendiente",
+      firstSeen: BEFORE,
+      lastSeen: BEFORE,
+    };
+    const suppliers = [a];
+    removeSupplier(suppliers, supplierKey(a));
+    expect(suppliers).toHaveLength(1);
+    expect(suppliers[0]).toEqual(a);
   });
 });
 
