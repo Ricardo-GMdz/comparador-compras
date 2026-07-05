@@ -2,7 +2,12 @@
 
 import { readFile, writeFile, rename } from "node:fs/promises";
 import { z } from "zod";
-import type { Supplier, SupplierCandidate, SupplierStatus } from "../domain/supplier.js";
+import type {
+  Supplier,
+  SupplierCandidate,
+  SupplierContact,
+  SupplierStatus,
+} from "../domain/supplier.js";
 
 /** Extrae el dominio (sin www) de una URL; undefined si no es válida. */
 function domainOf(website: string | undefined): string | undefined {
@@ -77,11 +82,14 @@ export function mergeSuppliers(
 export interface SupplierPatch {
   status?: SupplierStatus;
   notes?: string;
+  /** Contacto a mergear: solo completa campos faltantes (lo existente gana). */
+  contact?: SupplierContact;
 }
 
 /**
  * Aplica un patch de gestión al proveedor identificado por `key` (inmutable).
- * Refresca `lastSeen` y conserva el resto de los campos.
+ * Refresca `lastSeen` y conserva el resto de los campos. El `contact` del patch
+ * se mergea de forma superficial conservando lo existente (no pisa datos).
  * Devuelve `undefined` si la key no existe en el directorio.
  */
 export function updateSupplier(
@@ -99,6 +107,7 @@ export function updateSupplier(
     ...current,
     ...(patch.status !== undefined ? { status: patch.status } : {}),
     ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+    ...(patch.contact !== undefined ? { contact: { ...patch.contact, ...current.contact } } : {}),
     lastSeen: now,
   };
   return [...suppliers.slice(0, index), updated, ...suppliers.slice(index + 1)];

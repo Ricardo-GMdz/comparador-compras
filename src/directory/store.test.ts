@@ -153,6 +153,28 @@ describe("updateSupplier", () => {
     expect(result).toBeUndefined();
   });
 
+  it("mergea contact del patch sin pisar los campos existentes", () => {
+    // Arrange: el proveedor ya tiene email; el patch trae email nuevo y phone.
+    const supplier = existingSupplier({ contact: { email: "ventas@a.com" } });
+
+    // Act
+    const result = updateSupplier(
+      [supplier],
+      supplierKey(supplier),
+      { contact: { email: "otro@a.com", phone: "+52 55 1234" } },
+      NOW,
+    );
+
+    // Assert: el email existente gana; el phone faltante se agrega.
+    expect(result?.[0]?.contact).toEqual({ email: "ventas@a.com", phone: "+52 55 1234" });
+  });
+
+  it("un patch sin contact deja el contact intacto", () => {
+    const supplier = existingSupplier({ contact: { email: "ventas@a.com" } });
+    const result = updateSupplier([supplier], supplierKey(supplier), { status: "cotizó" }, NOW);
+    expect(result?.[0]?.contact).toEqual({ email: "ventas@a.com" });
+  });
+
   it("no muta el directorio de entrada", () => {
     const supplier = existingSupplier();
     const suppliers = [supplier];

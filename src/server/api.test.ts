@@ -46,6 +46,7 @@ function fakeDeps(existing: Supplier[] = []) {
             wholesalePrice: 180,
           },
         ]),
+        enrichContact: vi.fn(async () => ({})),
       },
       loadDirectory: vi.fn(async () => store.current),
       saveDirectory: vi.fn(async (_p: string, s: readonly Supplier[]) => {
@@ -227,6 +228,60 @@ describe("API", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as ApiBody;
     expect(body.suppliers?.map((s) => s.name)).toContain("Descartado");
+  });
+
+  it("POST /api/proveedor/:key/enriquecer mergea el contacto nuevo sin pisar el existente", async () => {
+    // Arrange: el proveedor ya tiene email; la fuente devuelve email y phone nuevos.
+    const { deps, store } = fakeDeps([
+      makeSupplier({ website: "https://a.mx", contact: { email: "ya@a.mx" } }),
+    ]);
+    deps.source.enrichContact = vi.fn(async () => ({
+      email: "nuevo@a.mx",
+      phone: "+52 55 1234",
+    }));
+    const app = buildApi(deps);
+
+    // Act
+    const res = await app.request(`/api/proveedor/${encodeURIComponent("d:a.mx")}/enriquecer`, {
+      method: "POST",
+    });
+
+    // Assert: el email existente gana; el phone se agrega; se persiste.
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ApiBody;
+    expect(body.ok).toBe(true);
+    expect(deps.saveDirectory).toHaveBeenCalledOnce();
+    expect(store.current[0]?.contact).toEqual({ email: "ya@a.mx", phone: "+52 55 1234" });
+  });
+
+  it("POST /api/proveedor/:key/enriquecer responde 404 con key inexistente", async () => {
+    const { deps } = fakeDeps([makeSupplier({ website: "https://a.mx" })]);
+    const app = buildApi(deps);
+    const res = await app.request(
+      `/api/proveedor/${encodeURIComponent("d:no-existe.mx")}/enriquecer`,
+      { method: "POST" },
+    );
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as ApiBody;
+    expect(body.ok).toBe(false);
+    expect(deps.source.enrichContact).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/proveedor/:key/enriquecer responde 502 si la fuente lanza", async () => {
+    const { deps, store } = fakeDeps([makeSupplier({ website: "https://a.mx" })]);
+    deps.source.enrichContact = vi.fn(async () => {
+      throw new Error("web_fetch caído");
+    });
+    const app = buildApi(deps);
+    const res = await app.request(`/api/proveedor/${encodeURIComponent("d:a.mx")}/enriquecer`, {
+      method: "POST",
+    });
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as ApiBody;
+    expect(body.ok).toBe(false);
+    // No se persiste nada si el enriquecimiento falló.
+    expect(deps.saveDirectory).not.toHaveBeenCalled();
+    expect(store.current[0]?.contact).toEqual({});
   });
 
   it("POST /api/buscar nunca elige un descartado como mejorOpcion", async () => {

@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { Supplier } from "../domain/supplier.js";
 import type { SupplierSource } from "../sourcing/supplierSource.js";
-import { mergeSuppliers, removeSupplier, updateSupplier } from "../directory/store.js";
+import { mergeSuppliers, removeSupplier, supplierKey, updateSupplier } from "../directory/store.js";
 import { rankSuppliers, selectBestSupplier } from "../ranking/rankSuppliers.js";
 import { logger } from "../logging/logger.js";
 
@@ -168,6 +168,31 @@ export function buildApi(deps: ApiDeps): Hono {
     }
     await deps.saveDirectory(deps.directoryPath, updated);
     return c.json({ ok: true });
+  });
+
+  app.post("/api/proveedor/:key/enriquecer", async (c) => {
+    const key = decodeKey(c.req.param("key"));
+    const suppliers = await deps.loadDirectory(deps.directoryPath);
+    const supplier = suppliers.find((s) => supplierKey(s) === key);
+    if (supplier === undefined) {
+      return c.json({ ok: false, error: `No existe un proveedor con key '${key}'.` }, 404);
+    }
+
+    try {
+      const found = await deps.source.enrichContact(supplier);
+      // Merge conservador: lo existente gana; solo se completan campos faltantes.
+      const updated = updateSupplier(suppliers, key, { contact: found }, deps.now());
+      if (updated === undefined) {
+        return c.json({ ok: false, error: `No existe un proveedor con key '${key}'.` }, 404);
+      }
+      await deps.saveDirectory(deps.directoryPath, updated);
+      const merged = updated.find((s) => supplierKey(s) === key);
+      return c.json({ ok: true, contact: merged?.contact ?? {} });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error inesperado";
+      logger.error("enriquecer: falló el enriquecimiento de contacto", { key, error: message });
+      return c.json({ ok: false, error: `Falló el enriquecimiento: ${message}` }, 502);
+    }
   });
 
   app.delete("/api/proveedor/:key", async (c) => {
