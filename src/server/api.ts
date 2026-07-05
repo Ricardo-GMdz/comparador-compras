@@ -7,6 +7,7 @@ import type { Supplier } from "../domain/supplier.js";
 import type { SupplierSource } from "../sourcing/supplierSource.js";
 import { mergeSuppliers, removeSupplier, supplierKey, updateSupplier } from "../directory/store.js";
 import { rankSuppliers, selectBestSupplier } from "../ranking/rankSuppliers.js";
+import { buildQuoteMessage } from "../quotes/quoteTemplate.js";
 import { logger } from "../logging/logger.js";
 
 /** Dependencias de la API (inyectables para test). */
@@ -32,6 +33,12 @@ const patchSchema = z
   .refine((patch) => patch.status !== undefined || patch.notes !== undefined, {
     message: "Se requiere al menos 'status' o 'notes'.",
   });
+
+// Query del pedido de cotización: cantidad y especificación, ambas requeridas.
+const cotizacionSchema = z.object({
+  quantity: z.string().min(1),
+  spec: z.string().min(1),
+});
 
 /** Columnas del CSV exportado, en orden. */
 const CSV_COLUMNS = [
@@ -168,6 +175,36 @@ export function buildApi(deps: ApiDeps): Hono {
     }
     await deps.saveDirectory(deps.directoryPath, updated);
     return c.json({ ok: true });
+  });
+
+  app.get("/api/proveedor/:key/cotizacion", async (c) => {
+    const key = decodeKey(c.req.param("key"));
+    const parsed = cotizacionSchema.safeParse({
+      quantity: c.req.query("quantity"),
+      spec: c.req.query("spec"),
+    });
+    if (!parsed.success) {
+      return c.json(
+        { ok: false, error: "Parámetros inválidos: se requieren 'quantity' y 'spec'." },
+        400,
+      );
+    }
+    const suppliers = await deps.loadDirectory(deps.directoryPath);
+    const supplier = suppliers.find((s) => supplierKey(s) === key);
+    if (supplier === undefined) {
+      return c.json({ ok: false, error: `No existe un proveedor con key '${key}'.` }, 404);
+    }
+    // El mensaje se arma en el server con el template local: una sola fuente
+    // de verdad (el front no duplica el texto).
+    return c.json({
+      ok: true,
+      message: buildQuoteMessage({
+        supplierName: supplier.name,
+        material: supplier.material,
+        quantity: parsed.data.quantity,
+        spec: parsed.data.spec,
+      }),
+    });
   });
 
   app.post("/api/proveedor/:key/enriquecer", async (c) => {

@@ -17,14 +17,48 @@
 
       <form id="buscar" class="search">
         <input id="query" class="input" placeholder="Ej. láminas de metal galvanizadas" />
-        <input id="region" class="input region" value="mx" />
+        <input id="region" class="input region" value="global" placeholder="global" />
         <button class="btn" type="submit">Buscar</button>
       </form>
+
+      <div class="toolbar">
+        <input id="filtro" class="input" placeholder="Filtrar por nombre o material…" />
+        <select id="filtroEstado" class="input select-estado">
+          <option value="todos">Todos</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="contactado">Contactado</option>
+          <option value="cotizó">Cotizó</option>
+          <option value="descartado">Descartado</option>
+        </select>
+        <a class="csv-link" href="/api/directorio.csv" download>⬇ Exportar CSV</a>
+      </div>
 
       <section id="best" class="best hidden"></section>
       <section id="tabla"></section>
       <p id="status" class="status"></p>
     </main>
+
+    <div id="modal" class="modal hidden">
+      <div class="modal-card">
+        <h3 id="modalTitulo">Pedido de cotización</h3>
+        <label class="field">
+          <span>Cantidad</span>
+          <input id="mCantidad" class="input" placeholder="Ej. 500 piezas" />
+        </label>
+        <label class="field">
+          <span>Especificación</span>
+          <input id="mSpec" class="input" />
+        </label>
+        <textarea id="mMensaje" class="mensaje" rows="9" readonly></textarea>
+        <div class="modal-actions">
+          <button id="mCopiar" class="btn" type="button">Copiar mensaje</button>
+          <a id="mWhatsapp" class="btn btn-wa hidden" target="_blank" rel="noopener"
+            >💬 Abrir en WhatsApp</a
+          >
+          <button id="mCerrar" class="btn btn-ghost" type="button">Cerrar</button>
+        </div>
+      </div>
+    </div>
     <script src="/app.js" type="module"></script>
   </body>
 </html>

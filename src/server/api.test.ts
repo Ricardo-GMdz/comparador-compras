@@ -10,6 +10,7 @@ interface ApiBody {
   nuevos?: number;
   total?: number;
   error?: string;
+  message?: string;
 }
 
 const NOW = "2026-07-01T00:00:00.000Z";
@@ -282,6 +283,48 @@ describe("API", () => {
     // No se persiste nada si el enriquecimiento falló.
     expect(deps.saveDirectory).not.toHaveBeenCalled();
     expect(store.current[0]?.contact).toEqual({});
+  });
+
+  it("GET /api/proveedor/:key/cotizacion devuelve el mensaje de cotización", async () => {
+    const { deps } = fakeDeps([
+      makeSupplier({ name: "Aceros MX", website: "https://a.mx", material: "lámina" }),
+    ]);
+    const app = buildApi(deps);
+    const res = await app.request(
+      `/api/proveedor/${encodeURIComponent("d:a.mx")}/cotizacion?quantity=${encodeURIComponent("500 piezas")}&spec=${encodeURIComponent("lámina galvanizada cal. 26")}`,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ApiBody;
+    expect(body.ok).toBe(true);
+    // El mensaje sale del template local con los datos del proveedor y la query.
+    expect(body.message).toContain("Aceros MX");
+    expect(body.message).toContain("500 piezas");
+    expect(body.message).toContain("lámina galvanizada cal. 26");
+    expect(body.message).not.toContain("undefined");
+  });
+
+  it("GET /api/proveedor/:key/cotizacion responde 404 con key inexistente", async () => {
+    const { deps } = fakeDeps([makeSupplier({ website: "https://a.mx" })]);
+    const app = buildApi(deps);
+    const res = await app.request(
+      `/api/proveedor/${encodeURIComponent("d:no-existe.mx")}/cotizacion?quantity=1&spec=x`,
+    );
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as ApiBody;
+    expect(body.ok).toBe(false);
+  });
+
+  it("GET /api/proveedor/:key/cotizacion responde 400 si falta quantity o spec", async () => {
+    const { deps } = fakeDeps([makeSupplier({ website: "https://a.mx" })]);
+    const app = buildApi(deps);
+    const sinQuantity = await app.request(
+      `/api/proveedor/${encodeURIComponent("d:a.mx")}/cotizacion?spec=x`,
+    );
+    expect(sinQuantity.status).toBe(400);
+    const sinSpec = await app.request(
+      `/api/proveedor/${encodeURIComponent("d:a.mx")}/cotizacion?quantity=1`,
+    );
+    expect(sinSpec.status).toBe(400);
   });
 
   it("POST /api/buscar nunca elige un descartado como mejorOpcion", async () => {

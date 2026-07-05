@@ -178,3 +178,116 @@ td {
 .hidden {
   display: none;
 }
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.select-estado {
+  flex: 0 0 150px;
+}
+.csv-link {
+  flex: 0 0 auto;
+  text-decoration: none;
+  color: var(--indigo);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 14px;
+  border: 1px solid #e6e6f0;
+  border-radius: 12px;
+  background: #fff;
+}
+.row-descartado {
+  opacity: 0.45;
+}
+.estado-select {
+  border: 1px solid #e6e6f0;
+  border-radius: 8px;
+  padding: 5px 7px;
+  font-size: 12px;
+  background: #fff;
+  color: var(--ink);
+}
+.notas {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 140px;
+}
+.acciones {
+  white-space: nowrap;
+}
+.acciones button {
+  border: 1px solid #e6e6f0;
+  background: #fff;
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-right: 4px;
+}
+.acciones button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 27, 48, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal.hidden {
+  display: none;
+}
+.modal-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 22px 24px;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 12px 40px rgba(31, 27, 48, 0.2);
+}
+.modal-card h3 {
+  margin: 0 0 14px;
+}
+.field {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.field .input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+.mensaje {
+  width: 100%;
+  border: 1px solid #e6e6f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  margin: 8px 0 14px;
+  background: #faf9fe;
+}
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn-ghost {
+  background: #f4f4f8;
+  color: var(--ink);
+}
+.btn-wa {
+  background: #16a34a;
+  text-decoration: none;
+  display: inline-block;
+}
