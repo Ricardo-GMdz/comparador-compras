@@ -45,6 +45,20 @@ El proyecto tiene dos capacidades:
 
 ## v2 — Sourcing de proveedores
 
+### v2.1 — gestión del directorio y cotización
+
+Sobre la base del v2, la v2.1 convierte el directorio en herramienta de trabajo:
+cada proveedor tiene **estado** (`pendiente` → `contactado` → `cotizó` /
+`descartado`) y **notas** editables desde la tabla; los `descartado` siguen
+visibles pero **nunca** compiten como mejor opción. El sourcing extrae la
+**unidad del precio** (`priceUnit`: pieza/kg/tonelada/m2) y el ranking solo
+compara precios dentro de la **unidad dominante** (espejo de `dominantCurrency`
+del v1). Un modal de **cotización** genera un mensaje copiable (template local
+`buildQuoteMessage`, con link directo a WhatsApp si hay número), el botón
+**Completar** enriquece el contacto de un proveedor puntual (agente con
+`web_fetch` sobre su sitio, solo campos faltantes) y el directorio se exporta a
+**CSV**. Los proveedores persistidos sin `status` migran a `"pendiente"` al leer.
+
 ### Flujo end-to-end
 
 ```
@@ -74,8 +88,19 @@ navegador  <- pinta mejor opción destacada + tabla del directorio
 - `src/ranking/rankSuppliers.ts` — `rankSuppliers` (orden) y `selectBestSupplier`
   (mejor por niveles: confiable + región + menor precio de mayoreo; descarta
   outliers). El MOQ es dato, no ordena.
-- `src/server/api.ts` — `buildApi(deps)` → app Hono con `POST /api/buscar` y
-  `GET /api/directorio` (dependencias inyectables para test).
+- `src/quotes/quoteTemplate.ts` — `buildQuoteMessage` (mensaje de pedido de
+  cotización en español, función pura).
+- `src/server/api.ts` — `buildApi(deps)` → app Hono (dependencias inyectables
+  para test) con:
+  - `POST /api/buscar` — sourcing + merge + ranking;
+  - `GET /api/directorio` — directorio completo + mejor opción;
+  - `GET /api/directorio.csv` — export CSV del directorio;
+  - `PATCH /api/proveedor/:key` — actualizar `status` / `notes`;
+  - `DELETE /api/proveedor/:key` — eliminar del directorio;
+  - `GET /api/proveedor/:key/cotizacion?quantity=..&spec=..` — mensaje de
+    cotización generado con `buildQuoteMessage`;
+  - `POST /api/proveedor/:key/enriquecer` — completar contacto vía
+    `enrichContact` (solo campos faltantes; lo existente gana).
 - `src/server/index.ts` — entry: arma dependencias reales (cliente Anthropic desde
   env, funciones de store) y sirve API + estáticos de `web/`.
 - `web/` — `index.html`, `styles.css`, `app.js` (la interfaz aprobada, vanilla).
