@@ -1,7 +1,38 @@
 // Validación y parseo defensivo de la respuesta del modelo → SupplierCandidate[].
 
 import { z } from "zod";
-import type { SupplierCandidate, SupplierContact } from "../domain/supplier.js";
+import type { PriceUnit, SupplierCandidate, SupplierContact } from "../domain/supplier.js";
+
+// Mapa de normalización: texto libre del modelo → unidad de precio canónica.
+// Las claves se comparan en minúsculas y sin el prefijo "por ".
+const PRICE_UNIT_MAP: Readonly<Record<string, PriceUnit>> = {
+  kg: "kg",
+  kgs: "kg",
+  kilo: "kg",
+  kilos: "kg",
+  kilogramo: "kg",
+  kilogramos: "kg",
+  pieza: "pieza",
+  piezas: "pieza",
+  pza: "pieza",
+  unidad: "pieza",
+  unidades: "pieza",
+  "c/u": "pieza",
+  ton: "tonelada",
+  tonelada: "tonelada",
+  toneladas: "tonelada",
+  m2: "m2",
+  "m²": "m2",
+  "metro cuadrado": "m2",
+  "metros cuadrados": "m2",
+};
+
+/** Normaliza la unidad textual del modelo; undefined si no se reconoce. */
+function normalizePriceUnit(raw: string | undefined): PriceUnit | undefined {
+  if (raw === undefined) return undefined;
+  const key = raw.trim().toLowerCase().replace(/^por\s+/, "");
+  return PRICE_UNIT_MAP[key];
+}
 
 const rawContactSchema = z.object({
   email: z.string().optional(),
@@ -17,6 +48,7 @@ const rawSupplierSchema = z.object({
   wholesalePrice: z.number().optional(),
   currency: z.string().optional(),
   moq: z.number().optional(),
+  priceUnit: z.string().optional(),
   contact: rawContactSchema.optional(),
   trusted: z.boolean().optional(),
   notes: z.string().optional(),
@@ -50,6 +82,7 @@ function toContact(raw: RawSupplier["contact"]): SupplierContact {
 
 function toCandidate(raw: RawSupplier, region: string): SupplierCandidate {
   const wholesalePrice = validPrice(raw.wholesalePrice);
+  const priceUnit = normalizePriceUnit(raw.priceUnit);
   return {
     name: raw.name,
     material: raw.material,
@@ -60,6 +93,7 @@ function toCandidate(raw: RawSupplier, region: string): SupplierCandidate {
     ...(wholesalePrice !== undefined ? { wholesalePrice } : {}),
     ...(raw.currency !== undefined ? { currency: raw.currency } : {}),
     ...(raw.moq !== undefined ? { moq: raw.moq } : {}),
+    ...(priceUnit !== undefined ? { priceUnit } : {}),
     ...(raw.notes !== undefined ? { notes: raw.notes } : {}),
   };
 }

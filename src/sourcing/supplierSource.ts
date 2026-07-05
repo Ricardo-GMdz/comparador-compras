@@ -10,6 +10,8 @@ const MAX_TOKENS = 16000;
 const WEB_SEARCH_TOOL_TYPE = "web_search_20260209";
 const WEB_SEARCH_TOOL_NAME = "web_search";
 const MAX_WEB_SEARCH_USES = 5;
+// Reintentos extra cuando la búsqueda devuelve 0 proveedores.
+const MAX_EMPTY_RETRIES = 1;
 
 /** Consulta a la que responde una fuente de proveedores. */
 export interface SupplierQuery {
@@ -34,8 +36,11 @@ function buildSystemPrompt(): string {
     "Respondé EXCLUSIVAMENTE con un objeto JSON (sin texto extra, sin ```), con la forma:",
     '{ "suppliers": [ { "name": string, "website"?: string, "material": string,',
     '  "wholesalePrice"?: number, "currency"?: string (ISO 4217), "moq"?: number,',
+    '  "priceUnit"?: "pieza"|"kg"|"tonelada"|"m2",',
     '  "contact"?: { "email"?: string, "phone"?: string, "whatsapp"?: string, "formUrl"?: string },',
     '  "trusted"?: boolean, "notes"?: string } ] }.',
+    'Cuando indiques "wholesalePrice", indicá también "priceUnit": la unidad a la que',
+    "corresponde ese precio (por pieza, por kg, por tonelada o por m2).",
     'Marcá "trusted": true solo para empresas reconocidas/verificables (con datos de contacto reales).',
     'Priorizá precio de mayoreo y datos de contacto. Si no encontrás, devolvé { "suppliers": [] }.',
   ].join("\n");
@@ -74,7 +79,7 @@ function parseJsonObject(text: string): unknown {
 
 /** Crea una fuente de proveedores que usa web_search. */
 export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
-  async function search(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
+  async function searchOnce(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
     const response = await deps.client.messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
@@ -95,6 +100,24 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
       return [];
     }
     return parseSuppliers(parseJsonObject(text), q.region);
+  }
+
+  // Busca con hasta MAX_EMPTY_RETRIES reintentos si la búsqueda viene vacía.
+  async function search(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
+    for (let attempt = 0; attempt <= MAX_EMPTY_RETRIES; attempt += 1) {
+      const candidates = await searchOnce(q);
+      if (candidates.length > 0) {
+        return candidates;
+      }
+      if (attempt < MAX_EMPTY_RETRIES) {
+        logger.warn("sourcing: búsqueda sin proveedores, reintentando", {
+          query: q.query,
+          region: q.region,
+          attempt: attempt + 1,
+        });
+      }
+    }
+    return [];
   }
 
   return { search };
