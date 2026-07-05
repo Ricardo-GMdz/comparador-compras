@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>comparador-compras — ejemplos visuales</title>
+    <style>
+      :root {
+        --indigo: #4f46e5;
+        --violet: #7c3aed;
+        --ink: #1f1b30;
+        --muted: #8b889e;
+        --line: #ececf3;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px 20px;
+        background: #f2f1f8;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Inter",
+          sans-serif;
+        color: var(--ink);
+      }
+      .page {
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 22px;
+        letter-spacing: -0.4px;
+        margin: 0 0 4px;
+      }
+      .lead {
+        color: var(--muted);
+        margin: 0 0 26px;
+        font-size: 14px;
+      }
+      .card {
+        background: #faf9fe;
+        border: 1px solid #ececf5;
+        border-radius: 16px;
+        padding: 22px;
+        margin-bottom: 26px;
+        box-shadow: 0 8px 30px rgba(79, 70, 229, 0.06);
+      }
+      .eyebrow {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: var(--indigo);
+        background: #efeefe;
+        padding: 4px 10px;
+        border-radius: 999px;
+        margin-bottom: 12px;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+      }
+      .logo {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        color: #fff;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--indigo), var(--violet));
+      }
+      .chip {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 5px 11px;
+        border-radius: 999px;
+      }
+      .chip-indigo {
+        background: #efeefe;
+        color: var(--indigo);
+      }
+      .chip-green {
+        background: #e9f9ef;
+        color: #16a34a;
+      }
+      .chip-amber {
+        background: #fef3e2;
+        color: #b45309;
+      }
+      .search {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .input {
+        background: #fff;
+        border: 1px solid #e6e6f0;
+        border-radius: 12px;
+        padding: 12px 15px;
+        font-size: 14px;
+        color: #33304a;
+      }
+      .input.q {
+        flex: 1;
+      }
+      .btn {
+        background: linear-gradient(135deg, var(--indigo), #6d5cf0);
+        color: #fff;
+        border-radius: 12px;
+        padding: 12px 22px;
+        font-weight: 600;
+        box-shadow: 0 6px 16px rgba(79, 70, 229, 0.25);
+      }
+      .best {
+        position: relative;
+        background: #fff;
+        border: 1px solid #e6e6f0;
+        border-radius: 14px;
+        padding: 18px 20px 18px 24px;
+        margin-bottom: 20px;
+        overflow: hidden;
+        box-shadow: 0 4px 18px rgba(79, 70, 229, 0.07);
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+      }
+      .best::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 5px;
+        background: linear-gradient(180deg, var(--indigo), var(--violet));
+      }
+      .badge {
+        display: inline-block;
+        background: #f3f1ff;
+        color: var(--indigo);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+      }
+      .best h3 {
+        margin: 9px 0 2px;
+        font-size: 19px;
+      }
+      .best .meta {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .price {
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+      }
+      .price small {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .contacts {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .contacts span,
+      .contacts a {
+        background: #f4f4f8;
+        color: var(--indigo);
+        font-size: 12px;
+        padding: 5px 10px;
+        border-radius: 8px;
+        text-decoration: none;
+      }
+      .contacts .wa {
+        background: #e9f9ef;
+        color: #16a34a;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        font-size: 13px;
+      }
+      th {
+        text-align: left;
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+        padding: 12px 14px;
+      }
+      td {
+        padding: 13px 14px;
+        border-top: 1px solid #f1f1f6;
+      }
+      tr.hi td {
+        background: #faf9ff;
+      }
+      .tag {
+        background: #eef;
+        color: var(--indigo);
+        padding: 3px 9px;
+        border-radius: 6px;
+        font-size: 12px;
+      }
+      .ico {
+        font-size: 15px;
+      }
+      .note {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>comparador-compras — ejemplos visuales</h1>
+      <p class="lead">
+        Con datos reales traídos en vivo por el agente. Dos productos: la app de sourcing de
+        proveedores (v2) y el comparador de retail (v1).
+      </p>
+
+      <!-- ===================== v2: PROVEEDORES ===================== -->
+      <section class="card">
+        <span class="eyebrow">v2 · Sourcing de proveedores</span>
+        <div class="topbar">
+          <div class="brand"><span class="logo">⌁</span> Proveedores</div>
+          <div style="display: flex; gap: 8px">
+            <span class="chip chip-indigo">16 en el directorio</span>
+            <span class="chip chip-green">+8 nuevos</span>
+          </div>
+        </div>
+
+        <div class="search">
+          <div class="input q">⌕ láminas de metal galvanizadas al por mayor</div>
+          <div class="input">México ▾</div>
+          <div class="btn">Buscar</div>
+        </div>
+
+        <div class="best">
+          <div>
+            <span class="badge">★ Mejor opción</span>
+            <h3>Aceros Crea</h3>
+            <div class="meta">
+              Lámina galvanizada · región mx · confiable · más barato de la muestra
+            </div>
+          </div>
+          <div style="text-align: right">
+            <div class="price">$25.45<small> MXN / u</small></div>
+            <div class="contacts" style="justify-content: flex-end">
+              <a>🌐 Web</a><a>📝 Cotizar</a>
+            </div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Proveedor</th>
+              <th>Material</th>
+              <th>Mayoreo</th>
+              <th>Región</th>
+              <th>Contacto</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="hi">
+              <td><strong>Aceros Crea</strong></td>
+              <td><span class="tag">Galvanizada</span></td>
+              <td>$25.45 MXN</td>
+              <td>mx</td>
+              <td class="ico">🌐 📝</td>
+              <td><span class="chip chip-green">Confiable</span></td>
+            </tr>
+            <tr>
+              <td><strong>Mapco Materiales</strong></td>
+              <td><span class="tag">Galvanizada</span></td>
+              <td>$610 MXN</td>
+              <td>mx</td>
+              <td class="ico">🌐 📞 💬</td>
+              <td><span class="chip chip-green">Confiable</span></td>
+            </tr>
+            <tr>
+              <td><strong>PYLSA (Perfiles y Láminas)</strong></td>
+              <td><span class="tag">Galvanizada</span></td>
+              <td>—</td>
+              <td>mx</td>
+              <td class="ico">🌐 ✉️ 📞 💬</td>
+              <td><span class="chip chip-green">Confiable</span></td>
+            </tr>
+            <tr>
+              <td><strong>PYMA — Materiales Anáhuac</strong></td>
+              <td><span class="tag">Galvanneal</span></td>
+              <td>—</td>
+              <td>mx</td>
+              <td class="ico">🌐 📞 💬 📝</td>
+              <td><span class="chip chip-green">Confiable</span></td>
+            </tr>
+            <tr>
+              <td><strong>CAOSA — Aceros de Occidente</strong></td>
+              <td><span class="tag">Galvanizada</span></td>
+              <td>—</td>
+              <td>mx</td>
+              <td class="ico">🌐 ✉️ 📞</td>
+              <td><span class="chip chip-green">Confiable</span></td>
+            </tr>
+            <tr>
+              <td><strong>Ternium (vía Mercado Libre)</strong></td>
+              <td><span class="tag">Galvanizada</span></td>
+              <td>—</td>
+              <td>mx</td>
+              <td class="ico">🌐 📝</td>
+              <td><span class="chip chip-green">Confiable</span></td>
+            </tr>
+            <tr>
+              <td><strong>Villalaminados</strong></td>
+              <td><span class="tag">Galvanizada</span></td>
+              <td>—</td>
+              <td>mx</td>
+              <td class="ico">🌐 📝</td>
+              <td><span class="chip chip-amber">Sin verificar</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          …y 9 proveedores más en el directorio (Max Acero, Aceros Torices, 3G Aceros, QuiMiNet,
+          Lamont, Ferrumma, Lámina en Movimiento, Distribuidora de Fierro Laminado, Plano.mx). Cada
+          búsqueda agrega o actualiza proveedores sin duplicar.
+        </div>
+      </section>
+
+      <!-- ===================== v1: RETAIL ===================== -->
+      <section class="card">
+        <span class="eyebrow">v1 · Comparación de retail</span>
+        <div class="topbar">
+          <div class="brand"><span class="logo">⌁</span> comparar</div>
+          <span class="chip chip-indigo">CLI · stdout limpio</span>
+        </div>
+
+        <div class="search">
+          <div class="input q">⌕ iPhone 15 128GB</div>
+          <div class="input">México ▾</div>
+          <div class="btn">Comparar</div>
+        </div>
+
+        <div class="best">
+          <div>
+            <span class="badge">★ Mejor opción</span>
+            <h3>Apple iPhone 15 128GB</h3>
+            <div class="meta">
+              Nuevo · Bodega Aurrera — elegido por sobre un reacondicionado más barato
+            </div>
+          </div>
+          <div style="text-align: right">
+            <div class="price">$11 499<small> MXN</small></div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Producto</th>
+              <th>Proveedor</th>
+              <th>Precio</th>
+              <th>Condición</th>
+              <th>Confiable</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>Apple iPhone 15 Plus 128GB (Reacondicionado)</td>
+              <td>Amazon México</td>
+              <td>$8 507 MXN</td>
+              <td><span class="chip chip-amber">Reacond.</span></td>
+              <td><span class="chip chip-green">sí</span></td>
+            </tr>
+            <tr class="hi">
+              <td>2</td>
+              <td>Apple iPhone 15 128GB</td>
+              <td>Bodega Aurrera</td>
+              <td>$11 499 MXN</td>
+              <td><span class="chip chip-green">Nuevo</span></td>
+              <td><span class="chip chip-green">sí</span></td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>Apple iPhone 15 Pro 128GB</td>
+              <td>MercadoLibre México</td>
+              <td>$18 899 MXN</td>
+              <td><span class="chip chip-green">Nuevo</span></td>
+              <td><span class="chip chip-green">sí</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          El ranking prefiere <strong>nuevo</strong> sobre reacondicionado (aunque sea más barato),
+          descarta precios outlier y sugiere upgrades de mayor gama en rango competitivo.
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
