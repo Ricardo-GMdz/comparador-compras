@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { supplierKey, mergeSuppliers, loadDirectory, saveDirectory } from "./store.js";
 import type { SupplierCandidate, Supplier } from "../domain/supplier.js";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -51,6 +51,7 @@ describe("mergeSuppliers", () => {
   it("actualiza un proveedor existente conservando firstSeen y refrescando lastSeen", () => {
     const existing: Supplier = {
       ...candidate({ website: "https://a.com", wholesalePrice: 200 }),
+      status: "pendiente",
       firstSeen: BEFORE,
       lastSeen: BEFORE,
     };
@@ -66,9 +67,32 @@ describe("mergeSuppliers", () => {
     expect(result.suppliers[0]?.lastSeen).toBe(NOW);
   });
 
+  it("agrega los candidatos nuevos con status 'pendiente'", () => {
+    const result = mergeSuppliers([], [candidate({ website: "https://a.com" })], NOW);
+    expect(result.suppliers[0]?.status).toBe("pendiente");
+  });
+
+  it("conserva status y notes del existente al actualizar (el sourcing no los pisa)", () => {
+    const existing: Supplier = {
+      ...candidate({ website: "https://a.com", notes: "ya les escribí" }),
+      status: "contactado",
+      firstSeen: BEFORE,
+      lastSeen: BEFORE,
+    };
+    const result = mergeSuppliers(
+      [existing],
+      [candidate({ website: "https://a.com", wholesalePrice: 180, notes: "nota del sourcing" })],
+      NOW,
+    );
+    expect(result.suppliers[0]?.status).toBe("contactado");
+    expect(result.suppliers[0]?.notes).toBe("ya les escribí");
+    expect(result.suppliers[0]?.wholesalePrice).toBe(180);
+  });
+
   it("no muta el directorio existente", () => {
     const existing: Supplier = {
       ...candidate({ website: "https://a.com" }),
+      status: "pendiente",
       firstSeen: BEFORE,
       lastSeen: BEFORE,
     };
@@ -89,7 +113,41 @@ describe("loadDirectory / saveDirectory", () => {
     const tmp = mkdtempSync(join(tmpdir(), "dir-"));
     const path = join(tmp, "directorio.json");
     const suppliers: Supplier[] = [
-      { ...candidate({ website: "https://a.com" }), firstSeen: NOW, lastSeen: NOW },
+      {
+        ...candidate({ website: "https://a.com" }),
+        status: "pendiente",
+        firstSeen: NOW,
+        lastSeen: NOW,
+      },
+    ];
+    await saveDirectory(path, suppliers);
+    const reloaded = await loadDirectory(path);
+    expect(reloaded).toEqual(suppliers);
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("migra un proveedor persistido sin status a 'pendiente'", async () => {
+    // Directorio viejo (pre-v2.1): el JSON en disco no trae `status`.
+    const tmp = mkdtempSync(join(tmpdir(), "dir-"));
+    const path = join(tmp, "directorio.json");
+    const legacy = [{ ...candidate({ website: "https://a.com" }), firstSeen: NOW, lastSeen: NOW }];
+    writeFileSync(path, JSON.stringify(legacy), "utf8");
+    const reloaded = await loadDirectory(path);
+    expect(reloaded).toHaveLength(1);
+    expect(reloaded[0]?.status).toBe("pendiente");
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("hace round-trip con status y priceUnit presentes", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "dir-"));
+    const path = join(tmp, "directorio.json");
+    const suppliers: Supplier[] = [
+      {
+        ...candidate({ website: "https://a.com", priceUnit: "kg" }),
+        status: "contactado",
+        firstSeen: NOW,
+        lastSeen: NOW,
+      },
     ];
     await saveDirectory(path, suppliers);
     const reloaded = await loadDirectory(path);

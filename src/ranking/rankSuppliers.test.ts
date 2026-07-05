@@ -10,6 +10,7 @@ function sup(o: Partial<Supplier>): Supplier {
     region: "mx",
     contact: {},
     trusted: true,
+    status: "pendiente",
     firstSeen: NOW,
     lastSeen: NOW,
     ...o,

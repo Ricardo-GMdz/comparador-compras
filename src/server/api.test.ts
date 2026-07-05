@@ -50,6 +50,7 @@ describe("API", () => {
         region: "mx",
         trusted: true,
         contact: {},
+        status: "pendiente",
         firstSeen: NOW,
         lastSeen: NOW,
       },

@@ -56,10 +56,17 @@ export function mergeSuppliers(
     const key = supplierKey(candidate);
     const prev = byKey.get(key);
     if (prev === undefined) {
-      byKey.set(key, { ...candidate, firstSeen: now, lastSeen: now });
+      byKey.set(key, { ...candidate, status: "pendiente", firstSeen: now, lastSeen: now });
       added += 1;
     } else {
-      byKey.set(key, { ...candidate, firstSeen: prev.firstSeen, lastSeen: now });
+      // El sourcing refresca datos pero NO pisa la gestión manual (status/notes).
+      byKey.set(key, {
+        ...candidate,
+        status: prev.status,
+        notes: prev.notes,
+        firstSeen: prev.firstSeen,
+        lastSeen: now,
+      });
     }
   }
 
@@ -79,11 +86,14 @@ const supplierSchema = z.object({
   material: z.string(),
   region: z.string(),
   wholesalePrice: z.number().optional(),
+  priceUnit: z.enum(["pieza", "kg", "tonelada", "m2", "unknown"]).optional(),
   currency: z.string().optional(),
   moq: z.number().optional(),
   contact: contactSchema,
   trusted: z.boolean(),
   notes: z.string().optional(),
+  // Migración: los directorios pre-v2.1 no traen `status`; entran como "pendiente".
+  status: z.enum(["pendiente", "contactado", "cotizó", "descartado"]).default("pendiente"),
   firstSeen: z.string(),
   lastSeen: z.string(),
 });
