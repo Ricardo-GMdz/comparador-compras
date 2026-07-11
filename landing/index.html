@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Comparador de Compras — Sourcing de proveedores con IA</title>
+    <meta
+      name="description"
+      content="Encontrá proveedores B2B con datos de contacto, armá tu directorio y conseguí la mejor opción de compra. Agente de IA para comprar y revender."
+    />
+    <style>
+      :root {
+        --indigo: #4f46e5;
+        --violet: #7c3aed;
+        --ink: #1f1b30;
+        --muted: #6b6880;
+        --line: #ececf3;
+        --bg: #faf9fe;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          "Inter",
+          sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+        line-height: 1.55;
+      }
+      .wrap {
+        max-width: 1020px;
+        margin: 0 auto;
+        padding: 0 22px;
+      }
+      a {
+        color: var(--indigo);
+        text-decoration: none;
+      }
+
+      header {
+        padding: 18px 0;
+      }
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 800;
+        letter-spacing: -0.3px;
+      }
+      .logo {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        color: #fff;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--indigo), var(--violet));
+      }
+      .nav a.gh {
+        font-size: 14px;
+        font-weight: 600;
+        background: #efeefe;
+        padding: 8px 14px;
+        border-radius: 10px;
+      }
+
+      .hero {
+        padding: 64px 0 46px;
+        text-align: center;
+      }
+      .pill {
+        display: inline-block;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--indigo);
+        background: #efeefe;
+        padding: 6px 14px;
+        border-radius: 999px;
+        margin-bottom: 18px;
+        letter-spacing: 0.3px;
+      }
+      h1 {
+        font-size: clamp(30px, 5vw, 48px);
+        letter-spacing: -1px;
+        line-height: 1.12;
+        max-width: 780px;
+        margin: 0 auto 16px;
+      }
+      h1 .grad {
+        background: linear-gradient(90deg, var(--indigo), var(--violet));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 17px;
+        max-width: 640px;
+        margin: 0 auto 28px;
+      }
+      .cta {
+        display: inline-block;
+        background: linear-gradient(135deg, var(--indigo), #6d5cf0);
+        color: #fff;
+        font-weight: 700;
+        padding: 13px 26px;
+        border-radius: 13px;
+        box-shadow: 0 8px 22px rgba(79, 70, 229, 0.28);
+      }
+      .cta.ghost {
+        background: #fff;
+        color: var(--indigo);
+        border: 1px solid var(--line);
+        box-shadow: none;
+        margin-left: 10px;
+      }
+
+      .shot {
+        margin: 46px auto 0;
+        max-width: 860px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 24px 60px rgba(79, 70, 229, 0.1);
+        overflow: hidden;
+        text-align: left;
+      }
+      .shot .bar {
+        display: flex;
+        gap: 6px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .shot .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #e6e6f0;
+      }
+      .shot .body {
+        padding: 18px;
+        font-size: 13px;
+      }
+      .best {
+        position: relative;
+        background: #fff;
+        border: 1px solid #e6e6f0;
+        border-radius: 12px;
+        padding: 14px 16px 14px 20px;
+        margin-bottom: 14px;
+        overflow: hidden;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+      .best::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 5px;
+        background: linear-gradient(180deg, var(--indigo), var(--violet));
+      }
+      .badge {
+        display: inline-block;
+        background: #f3f1ff;
+        color: var(--indigo);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        padding: 3px 9px;
+        border-radius: 999px;
+      }
+      .best h3 {
+        font-size: 16px;
+        margin-top: 6px;
+      }
+      .best .meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .price {
+        font-size: 20px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+      .price small {
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      th {
+        text-align: left;
+        color: var(--muted);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 9px 10px;
+      }
+      td {
+        padding: 10px;
+        border-top: 1px solid #f1f1f6;
+      }
+      .chip {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 999px;
+      }
+      .chip-green {
+        background: #e9f9ef;
+        color: #16a34a;
+      }
+      .chip-amber {
+        background: #fef3e2;
+        color: #b45309;
+      }
+      .chip-indigo {
+        background: #efeefe;
+        color: var(--indigo);
+      }
+
+      section.features {
+        padding: 64px 0;
+      }
+      .kicker {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--indigo);
+        margin-bottom: 10px;
+      }
+      h2 {
+        text-align: center;
+        font-size: clamp(24px, 3.4vw, 32px);
+        letter-spacing: -0.6px;
+        margin-bottom: 34px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 22px;
+      }
+      .card .ico {
+        font-size: 22px;
+        margin-bottom: 10px;
+      }
+      .card h3 {
+        font-size: 15px;
+        margin-bottom: 6px;
+      }
+      .card p {
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+
+      section.steps {
+        padding: 10px 0 64px;
+      }
+      .stepgrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+        counter-reset: paso;
+      }
+      .step {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 22px;
+        position: relative;
+      }
+      .step::before {
+        counter-increment: paso;
+        content: counter(paso);
+        position: absolute;
+        top: -14px;
+        left: 20px;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, var(--indigo), var(--violet));
+        color: #fff;
+        font-weight: 800;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .step h3 {
+        font-size: 15px;
+        margin: 6px 0;
+      }
+      .step p {
+        color: var(--muted);
+        font-size: 13.5px;
+      }
+
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 28px 0 40px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .foot {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .stack {
+        font-size: 12px;
+      }
+      .stack span {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 4px 10px;
+        margin-right: 6px;
+        display: inline-block;
+        margin-top: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="wrap">
+      <nav class="nav">
+        <div class="brand"><span class="logo">⌁</span> Comparador de Compras</div>
+        <a class="gh" href="https://github.com/Ricardo-GMdz/comparador-compras" rel="noopener"
+          >GitHub →</a
+        >
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero wrap">
+        <span class="pill">Agente de IA · Sourcing B2B · Proyecto personal</span>
+        <h1>
+          Encontrá <span class="grad">proveedores</span>, contactalos y comprá al mejor precio
+        </h1>
+        <p class="sub">
+          Escribís qué querés comprar para revender — el agente busca proveedores reales, reúne sus
+          datos de contacto, arma tu directorio y te recomienda la mejor opción de mayoreo.
+        </p>
+        <a
+          class="cta"
+          href="https://github.com/Ricardo-GMdz/comparador-compras#readme"
+          rel="noopener"
+          >Ver el proyecto</a
+        >
+        <a class="cta ghost" href="#como">Cómo funciona</a>
+
+        <!-- "Captura" ilustrativa con datos reales de una búsqueda -->
+        <div class="shot">
+          <div class="bar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </div>
+          <div class="body">
+            <div class="best">
+              <div>
+                <span class="badge">★ Mejor opción</span>
+                <h3>Mapco Materiales</h3>
+                <div class="meta">Lámina galvanizada · mx · confiable · contacto completo</div>
+              </div>
+              <div class="price">$610 <small>MXN / pieza</small></div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Proveedor</th>
+                  <th>Mayoreo</th>
+                  <th>Contacto</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Mapco Materiales</strong></td>
+                  <td>$610 / pieza</td>
+                  <td>🌐 📞 💬</td>
+                  <td><span class="chip chip-green">Cotizó</span></td>
+                </tr>
+                <tr>
+                  <td><strong>PYLSA</strong></td>
+                  <td>—</td>
+                  <td>🌐 ✉️ 📞 💬</td>
+                  <td><span class="chip chip-indigo">Contactado</span></td>
+                </tr>
+                <tr>
+                  <td><strong>Aceros Crea</strong></td>
+                  <td>$25.45 / kg</td>
+                  <td>🌐 📝</td>
+                  <td><span class="chip chip-amber">Pendiente</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="features wrap">
+        <div class="kicker">Qué hace</div>
+        <h2>De la búsqueda a la compra, en un solo lugar</h2>
+        <div class="grid">
+          <div class="card">
+            <div class="ico">🔎</div>
+            <h3>Sourcing con IA</h3>
+            <p>
+              Busca proveedores B2B reales en la web (incluye marketplaces como MercadoLibre) para
+              el material que necesites, en tu región.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">📇</div>
+            <h3>Contacto listo</h3>
+            <p>
+              Reúne web, email, teléfono, WhatsApp y formularios de cada proveedor. Vos decidís a
+              quién escribirle.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🗂️</div>
+            <h3>Directorio que crece</h3>
+            <p>
+              Cada búsqueda suma o actualiza proveedores sin duplicar. Estado de contacto, notas,
+              filtros y export CSV.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🏆</div>
+            <h3>Mejor opción explicable</h3>
+            <p>
+              Ranking por niveles: confiable, de tu región y el menor precio de mayoreo — comparando
+              solo unidades compatibles.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">✉️</div>
+            <h3>Cotización en un clic</h3>
+            <p>
+              Genera el pedido de cotización (cantidad + especificación) listo para copiar o abrir
+              en WhatsApp.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🛡️</div>
+            <h3>Datos con defensa</h3>
+            <p>
+              Validación estricta de lo que devuelve la IA: precios imposibles, unidades mezcladas y
+              duplicados quedan fuera.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="como" class="steps wrap">
+        <div class="kicker">Cómo funciona</div>
+        <h2>Tres pasos</h2>
+        <div class="stepgrid">
+          <div class="step">
+            <h3>Buscá</h3>
+            <p>
+              "Láminas de metal galvanizadas al por mayor", región México. El agente sale a buscar
+              proveedores reales.
+            </p>
+          </div>
+          <div class="step">
+            <h3>Gestioná</h3>
+            <p>
+              El directorio guarda cada proveedor con su contacto. Marcá contactado/cotizó, dejá
+              notas, filtrá y exportá.
+            </p>
+          </div>
+          <div class="step">
+            <h3>Comprá mejor</h3>
+            <p>
+              La mejor opción queda destacada y el pedido de cotización se genera solo — copiás,
+              mandás y cerrás precio.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap foot">
+        <div>
+          <strong style="color: var(--ink)">Comparador de Compras</strong> — proyecto personal,
+          corre local con tu propia API key.
+          <div class="stack">
+            <span>TypeScript</span><span>Node</span><span>Hono</span
+            ><span>Claude API + web_search</span><span>zod</span><span>vitest · TDD</span>
+          </div>
+        </div>
+        <a href="https://github.com/Ricardo-GMdz/comparador-compras" rel="noopener"
+          >github.com/Ricardo-GMdz/comparador-compras</a
+        >
+      </div>
+    </footer>
+  </body>
+</html>
