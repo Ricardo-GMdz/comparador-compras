@@ -13,10 +13,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # La versión de pnpm sale del campo "packageManager" de package.json
+      # (declararla también acá hace fallar a pnpm/action-setup).
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node
         uses: actions/setup-node@v4
