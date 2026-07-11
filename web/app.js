@@ -336,6 +336,27 @@ $("buscar").addEventListener("submit", async (e) => {
 $("filtro").addEventListener("input", render);
 $("filtroEstado").addEventListener("change", render);
 
+// Publicar la selección (contactados/cotizó) al directorio público de la landing.
+$("publicar").addEventListener("click", async () => {
+  const boton = $("publicar");
+  boton.disabled = true;
+  try {
+    const res = await fetch("/api/publicar", { method: "POST" });
+    const data = await res.json();
+    if (!data.ok) {
+      $("status").textContent = data.error ?? "No se pudo publicar.";
+      return;
+    }
+    $("status").textContent =
+      `${data.publicados} proveedores publicados en landing/proveedores.json — ` +
+      "commiteá y pusheá para verlos en la landing.";
+  } catch {
+    $("status").textContent = "No se pudo publicar.";
+  } finally {
+    boton.disabled = false;
+  }
+});
+
 // Delegación: cambios de estado por fila.
 $("tabla").addEventListener("change", (e) => {
   const select = e.target.closest(".estado-select");

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { buildApi } from "./api.js";
 import type { Supplier } from "../domain/supplier.js";
+import type { PublicSupplier } from "../directory/publicDirectory.js";
 
 // Forma laxa de la respuesta JSON de la API para las aserciones del test.
 interface ApiBody {
@@ -32,9 +33,14 @@ function makeSupplier(overrides: Partial<Supplier> = {}): Supplier {
 
 function fakeDeps(existing: Supplier[] = []) {
   const store = { current: existing as readonly Supplier[] };
+  const published: { current: readonly PublicSupplier[] | undefined } = { current: undefined };
   return {
     store,
+    published,
     deps: {
+      savePublicDirectory: vi.fn(async (suppliers: readonly PublicSupplier[]) => {
+        published.current = suppliers;
+      }),
       source: {
         search: vi.fn(async () => [
           {
@@ -348,5 +354,47 @@ describe("API", () => {
     // Sigue apareciendo en la lista, pero no como mejor opción.
     expect(body.suppliers?.map((s) => s.name)).toContain("Descartado");
     expect(body.mejorOpcion?.name).toBe("Aceros");
+  });
+
+  it("POST /api/publicar escribe el directorio público (solo contactados/cotizó, sin notas)", async () => {
+    // Arrange: uno publicable con notas privadas y uno pendiente.
+    const { deps, published } = fakeDeps([
+      makeSupplier({
+        name: "PYLSA",
+        website: "https://pylsa.com",
+        status: "cotizó",
+        notes: "margen 12% (privado)",
+      }),
+      makeSupplier({ name: "Pendiente", website: "https://p.mx", status: "pendiente" }),
+    ]);
+    const app = buildApi(deps);
+
+    // Act
+    const res = await app.request("/api/publicar", { method: "POST" });
+
+    // Assert
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ApiBody & { publicados?: number };
+    expect(body.ok).toBe(true);
+    expect(body.publicados).toBe(1);
+    expect(published.current?.map((s) => s.name)).toEqual(["PYLSA"]);
+    expect(published.current?.[0]).not.toHaveProperty("notes");
+  });
+
+  it("POST /api/publicar responde 500 con envelope si la escritura falla", async () => {
+    // Arrange
+    const { deps } = fakeDeps([makeSupplier({ status: "contactado" })]);
+    deps.savePublicDirectory = vi.fn(async () => {
+      throw new Error("disco lleno");
+    });
+    const app = buildApi(deps);
+
+    // Act
+    const res = await app.request("/api/publicar", { method: "POST" });
+
+    // Assert
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as ApiBody;
+    expect(body.ok).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { Supplier } from "../domain/supplier.js";
 import type { SupplierSource } from "../sourcing/supplierSource.js";
 import { mergeSuppliers, removeSupplier, supplierKey, updateSupplier } from "../directory/store.js";
+import { buildPublicDirectory, type PublicSupplier } from "../directory/publicDirectory.js";
 import { rankSuppliers, selectBestSupplier } from "../ranking/rankSuppliers.js";
 import { buildQuoteMessage } from "../quotes/quoteTemplate.js";
 import { logger } from "../logging/logger.js";
@@ -15,6 +16,8 @@ export interface ApiDeps {
   source: SupplierSource;
   loadDirectory: (path: string) => Promise<readonly Supplier[]>;
   saveDirectory: (path: string, suppliers: readonly Supplier[]) => Promise<void>;
+  /** Escribe el directorio público (la selección que muestra la landing). */
+  savePublicDirectory: (suppliers: readonly PublicSupplier[]) => Promise<void>;
   now: () => string;
   directoryPath: string;
 }
@@ -241,6 +244,20 @@ export function buildApi(deps: ApiDeps): Hono {
     }
     await deps.saveDirectory(deps.directoryPath, remaining);
     return c.json({ ok: true });
+  });
+
+  // Publica la selección (contactados/cotizó, sin datos privados) para la landing.
+  app.post("/api/publicar", async (c) => {
+    try {
+      const suppliers = await deps.loadDirectory(deps.directoryPath);
+      const publicSuppliers = buildPublicDirectory(suppliers);
+      await deps.savePublicDirectory(publicSuppliers);
+      return c.json({ ok: true, publicados: publicSuppliers.length });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Error inesperado";
+      logger.error("publicar: falló la escritura del directorio público", { error: message });
+      return c.json({ ok: false, error: `No se pudo publicar: ${message}` }, 500);
+    }
   });
 
   return app;
