@@ -2,7 +2,12 @@
 
 import { readFile, writeFile, rename } from "node:fs/promises";
 import { z } from "zod";
-import type { Supplier, SupplierCandidate } from "../domain/supplier.js";
+import type {
+  Supplier,
+  SupplierCandidate,
+  SupplierContact,
+  SupplierStatus,
+} from "../domain/supplier.js";
 
 /** Extrae el dominio (sin www) de una URL; undefined si no es válida. */
 function domainOf(website: string | undefined): string | undefined {
@@ -56,14 +61,71 @@ export function mergeSuppliers(
     const key = supplierKey(candidate);
     const prev = byKey.get(key);
     if (prev === undefined) {
-      byKey.set(key, { ...candidate, firstSeen: now, lastSeen: now });
+      byKey.set(key, { ...candidate, status: "pendiente", firstSeen: now, lastSeen: now });
       added += 1;
     } else {
-      byKey.set(key, { ...candidate, firstSeen: prev.firstSeen, lastSeen: now });
+      // El sourcing refresca datos pero NO pisa la gestión manual (status/notes).
+      byKey.set(key, {
+        ...candidate,
+        status: prev.status,
+        notes: prev.notes,
+        firstSeen: prev.firstSeen,
+        lastSeen: now,
+      });
     }
   }
 
   return { suppliers: [...byKey.values()], added };
+}
+
+/** Cambios de gestión manual aplicables a un proveedor del directorio. */
+export interface SupplierPatch {
+  status?: SupplierStatus;
+  notes?: string;
+  /** Contacto a mergear: solo completa campos faltantes (lo existente gana). */
+  contact?: SupplierContact;
+}
+
+/**
+ * Aplica un patch de gestión al proveedor identificado por `key` (inmutable).
+ * Refresca `lastSeen` y conserva el resto de los campos. El `contact` del patch
+ * se mergea de forma superficial conservando lo existente (no pisa datos).
+ * Devuelve `undefined` si la key no existe en el directorio.
+ */
+export function updateSupplier(
+  suppliers: readonly Supplier[],
+  key: string,
+  patch: SupplierPatch,
+  now: string,
+): readonly Supplier[] | undefined {
+  const index = suppliers.findIndex((supplier) => supplierKey(supplier) === key);
+  if (index === -1) {
+    return undefined;
+  }
+  const current = suppliers[index] as Supplier;
+  const updated: Supplier = {
+    ...current,
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+    ...(patch.contact !== undefined ? { contact: { ...patch.contact, ...current.contact } } : {}),
+    lastSeen: now,
+  };
+  return [...suppliers.slice(0, index), updated, ...suppliers.slice(index + 1)];
+}
+
+/**
+ * Elimina del directorio el proveedor identificado por `key` (inmutable).
+ * Devuelve `undefined` si la key no existe.
+ */
+export function removeSupplier(
+  suppliers: readonly Supplier[],
+  key: string,
+): readonly Supplier[] | undefined {
+  const index = suppliers.findIndex((supplier) => supplierKey(supplier) === key);
+  if (index === -1) {
+    return undefined;
+  }
+  return [...suppliers.slice(0, index), ...suppliers.slice(index + 1)];
 }
 
 // Esquema del archivo persistido: validamos al leer (dato de un archivo externo).
@@ -79,11 +141,14 @@ const supplierSchema = z.object({
   material: z.string(),
   region: z.string(),
   wholesalePrice: z.number().optional(),
+  priceUnit: z.enum(["pieza", "kg", "tonelada", "m2", "unknown"]).optional(),
   currency: z.string().optional(),
   moq: z.number().optional(),
   contact: contactSchema,
   trusted: z.boolean(),
   notes: z.string().optional(),
+  // Migración: los directorios pre-v2.1 no traen `status`; entran como "pendiente".
+  status: z.enum(["pendiente", "contactado", "cotizó", "descartado"]).default("pendiente"),
   firstSeen: z.string(),
   lastSeen: z.string(),
 });

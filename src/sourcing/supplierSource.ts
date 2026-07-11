@@ -1,7 +1,8 @@
-// Fuente de proveedores basada en el server tool web_search del SDK de Anthropic.
+// Fuente de proveedores basada en los server tools web_search/web_fetch del SDK de Anthropic.
 
 import type Anthropic from "@anthropic-ai/sdk";
-import type { SupplierCandidate } from "../domain/supplier.js";
+import { z } from "zod";
+import type { Supplier, SupplierCandidate, SupplierContact } from "../domain/supplier.js";
 import { logger } from "../logging/logger.js";
 import { parseSuppliers } from "./supplierSchema.js";
 
@@ -10,6 +11,13 @@ const MAX_TOKENS = 16000;
 const WEB_SEARCH_TOOL_TYPE = "web_search_20260209";
 const WEB_SEARCH_TOOL_NAME = "web_search";
 const MAX_WEB_SEARCH_USES = 5;
+// Reintentos extra cuando la búsqueda devuelve 0 proveedores.
+const MAX_EMPTY_RETRIES = 1;
+// Enriquecimiento de contacto: visitar la web del proveedor con web_fetch.
+const WEB_FETCH_TOOL_TYPE = "web_fetch_20260209";
+const WEB_FETCH_TOOL_NAME = "web_fetch";
+const MAX_WEB_FETCH_USES = 3;
+const MAX_ENRICH_SEARCH_USES = 2;
 
 /** Consulta a la que responde una fuente de proveedores. */
 export interface SupplierQuery {
@@ -24,6 +32,8 @@ export interface SupplierSourceDeps {
 
 export interface SupplierSource {
   search(query: SupplierQuery): Promise<readonly SupplierCandidate[]>;
+  /** Completa SOLO los campos de contacto faltantes; `{}` si no hay nada nuevo. */
+  enrichContact(supplier: Supplier): Promise<SupplierContact>;
 }
 
 function buildSystemPrompt(): string {
@@ -34,8 +44,11 @@ function buildSystemPrompt(): string {
     "Respondé EXCLUSIVAMENTE con un objeto JSON (sin texto extra, sin ```), con la forma:",
     '{ "suppliers": [ { "name": string, "website"?: string, "material": string,',
     '  "wholesalePrice"?: number, "currency"?: string (ISO 4217), "moq"?: number,',
+    '  "priceUnit"?: "pieza"|"kg"|"tonelada"|"m2",',
     '  "contact"?: { "email"?: string, "phone"?: string, "whatsapp"?: string, "formUrl"?: string },',
     '  "trusted"?: boolean, "notes"?: string } ] }.',
+    'Cuando indiques "wholesalePrice", indicá también "priceUnit": la unidad a la que',
+    "corresponde ese precio (por pieza, por kg, por tonelada o por m2).",
     'Marcá "trusted": true solo para empresas reconocidas/verificables (con datos de contacto reales).',
     'Priorizá precio de mayoreo y datos de contacto. Si no encontrás, devolvé { "suppliers": [] }.',
   ].join("\n");
@@ -47,6 +60,52 @@ function buildUserPrompt(q: SupplierQuery): string {
     `Región objetivo: "${q.region}". Preferí proveedores de esa región y su moneda.`,
     "Incluí su web y datos de contacto (email/teléfono/WhatsApp/formulario) cuando estén.",
   ].join("\n");
+}
+
+function buildEnrichSystemPrompt(): string {
+  return [
+    "Sos un asistente que completa datos de contacto de un proveedor B2B.",
+    "Visitá el sitio web indicado (y buscá en la web solo si el sitio no alcanza)",
+    "para encontrar datos de contacto REALES publicados por la empresa.",
+    "No inventes datos: si un campo no aparece publicado, omitilo.",
+    "Respondé EXCLUSIVAMENTE con un objeto JSON (sin texto extra, sin ```), con la forma:",
+    '{ "contact": { "email"?: string, "phone"?: string, "whatsapp"?: string, "formUrl"?: string } }.',
+    'Si no encontrás ningún dato, devolvé { "contact": {} }.',
+  ].join("\n");
+}
+
+function buildEnrichUserPrompt(supplier: Supplier): string {
+  return [
+    `Proveedor: "${supplier.name}" (material: ${supplier.material}, región: ${supplier.region}).`,
+    `Visitá su sitio: ${supplier.website ?? ""}`,
+    "Extraé email, teléfono, WhatsApp y/o URL de formulario de contacto, si están publicados.",
+  ].join("\n");
+}
+
+// Respuesta esperada del enriquecimiento; parseo defensivo (dato externo).
+const enrichResponseSchema = z.object({
+  contact: z
+    .object({
+      email: z.string().optional(),
+      phone: z.string().optional(),
+      whatsapp: z.string().optional(),
+      formUrl: z.string().optional(),
+    })
+    .optional(),
+});
+
+/** Campos de contacto conocidos, en orden estable. */
+const CONTACT_FIELDS = ["email", "phone", "whatsapp", "formUrl"] as const;
+
+/** Deja solo los campos que `existing` no tiene (lo existente nunca se pisa). */
+function onlyMissingContactFields(
+  existing: SupplierContact,
+  found: SupplierContact,
+): SupplierContact {
+  const entries = CONTACT_FIELDS.filter(
+    (field) => existing[field] === undefined && found[field] !== undefined,
+  ).map((field) => [field, found[field]] as const);
+  return Object.fromEntries(entries) as SupplierContact;
 }
 
 function extractText(content: Anthropic.Messages.ContentBlock[]): string {
@@ -74,7 +133,7 @@ function parseJsonObject(text: string): unknown {
 
 /** Crea una fuente de proveedores que usa web_search. */
 export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
-  async function search(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
+  async function searchOnce(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
     const response = await deps.client.messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
@@ -97,5 +156,60 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
     return parseSuppliers(parseJsonObject(text), q.region);
   }
 
-  return { search };
+  // Busca con hasta MAX_EMPTY_RETRIES reintentos si la búsqueda viene vacía.
+  async function search(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
+    for (let attempt = 0; attempt <= MAX_EMPTY_RETRIES; attempt += 1) {
+      const candidates = await searchOnce(q);
+      if (candidates.length > 0) {
+        return candidates;
+      }
+      if (attempt < MAX_EMPTY_RETRIES) {
+        logger.warn("sourcing: búsqueda sin proveedores, reintentando", {
+          query: q.query,
+          region: q.region,
+          attempt: attempt + 1,
+        });
+      }
+    }
+    return [];
+  }
+
+  // Visita la web del proveedor y devuelve SOLO los campos de contacto faltantes.
+  async function enrichContact(supplier: Supplier): Promise<SupplierContact> {
+    if (supplier.website === undefined) {
+      logger.warn("enriquecer: el proveedor no tiene website, nada que visitar", {
+        supplier: supplier.name,
+      });
+      return {};
+    }
+
+    const response = await deps.client.messages.create({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      thinking: { type: "adaptive" },
+      system: buildEnrichSystemPrompt(),
+      tools: [
+        { type: WEB_FETCH_TOOL_TYPE, name: WEB_FETCH_TOOL_NAME, max_uses: MAX_WEB_FETCH_USES },
+        {
+          type: WEB_SEARCH_TOOL_TYPE,
+          name: WEB_SEARCH_TOOL_NAME,
+          max_uses: MAX_ENRICH_SEARCH_USES,
+        },
+      ],
+      messages: [{ role: "user", content: buildEnrichUserPrompt(supplier) }],
+    });
+
+    const text = extractText(response.content);
+    if (text.length === 0) {
+      logger.warn("enriquecer: el modelo no devolvió texto utilizable", {
+        supplier: supplier.name,
+      });
+      return {};
+    }
+
+    const parsed = enrichResponseSchema.parse(parseJsonObject(text));
+    return onlyMissingContactFields(supplier.contact, parsed.contact ?? {});
+  }
+
+  return { search, enrichContact };
 }

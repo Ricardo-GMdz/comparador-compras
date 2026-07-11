@@ -1,5 +1,11 @@
 // Tipos de dominio del sourcing de proveedores. Inmutables por convención.
 
+/** Estado de gestión de un proveedor dentro del directorio. */
+export type SupplierStatus = "pendiente" | "contactado" | "cotizó" | "descartado";
+
+/** Unidad a la que refiere el precio de mayoreo. */
+export type PriceUnit = "pieza" | "kg" | "tonelada" | "m2" | "unknown";
+
 /** Datos de contacto reunidos de un proveedor (nunca se envía nada). */
 export interface SupplierContact {
   email?: string;
@@ -19,6 +25,8 @@ export interface SupplierCandidate {
   region: string;
   /** Precio de mayoreo por unidad. */
   wholesalePrice?: number;
+  /** Unidad del precio (ej. por kg vs por pieza); ausente si no se conoce. */
+  priceUnit?: PriceUnit;
   currency?: string;
   /** Mínimo de compra (informativo; no ordena el ranking). */
   moq?: number;
@@ -28,8 +36,10 @@ export interface SupplierCandidate {
   notes?: string;
 }
 
-/** Proveedor persistido en el directorio: candidate + timestamps ISO 8601. */
+/** Proveedor persistido en el directorio: candidate + gestión + timestamps ISO 8601. */
 export interface Supplier extends SupplierCandidate {
+  /** Estado de gestión; los persistidos viejos migran a "pendiente" al leer. */
+  status: SupplierStatus;
   firstSeen: string;
   lastSeen: string;
 }

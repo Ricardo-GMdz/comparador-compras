@@ -1,16 +1,24 @@
 import { describe, it, expect, vi } from "vitest";
 import { createSupplierSource } from "./supplierSource.js";
+import type { Supplier } from "../domain/supplier.js";
 
 // Cliente Anthropic mínimo mockeado: solo messages.create.
+// Devuelve los textos en orden (uno por llamada); repite el último si se agotan.
+function fakeClientSequence(texts: readonly string[]) {
+  let call = 0;
+  const create = vi.fn(async (_params: unknown) => {
+    const text = texts[Math.min(call, texts.length - 1)] ?? "";
+    call += 1;
+    return {
+      stop_reason: "end_turn",
+      content: [{ type: "text", text }],
+    };
+  });
+  return { client: { messages: { create } } as never, create };
+}
+
 function fakeClient(text: string) {
-  return {
-    messages: {
-      create: vi.fn(async () => ({
-        stop_reason: "end_turn",
-        content: [{ type: "text", text }],
-      })),
-    },
-  } as never;
+  return fakeClientSequence([text]).client;
 }
 
 const RESPONSE = JSON.stringify({
@@ -43,5 +51,112 @@ describe("createSupplierSource", () => {
     const source = createSupplierSource({ client: fakeClient("") });
     const result = await source.search({ query: "x", region: "mx" });
     expect(result).toEqual([]);
+  });
+
+  describe("reintento si la búsqueda viene vacía", () => {
+    const EMPTY = JSON.stringify({ suppliers: [] });
+
+    it("reintenta una vez cuando la primera búsqueda devuelve 0 proveedores", async () => {
+      // Arrange: primera vacía, segunda con resultados
+      const { client, create } = fakeClientSequence([EMPTY, RESPONSE]);
+      const source = createSupplierSource({ client });
+
+      // Act
+      const result = await source.search({ query: "lámina", region: "mx" });
+
+      // Assert
+      expect(create).toHaveBeenCalledTimes(2);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.name).toBe("Aceros del Norte");
+    });
+
+    it("devuelve [] con exactamente 2 llamadas cuando ambas búsquedas vienen vacías", async () => {
+      const { client, create } = fakeClientSequence([EMPTY, EMPTY]);
+      const source = createSupplierSource({ client });
+
+      const result = await source.search({ query: "x", region: "mx" });
+
+      expect(create).toHaveBeenCalledTimes(2);
+      expect(result).toEqual([]);
+    });
+
+    it("hace una sola llamada cuando la primera búsqueda trae resultados", async () => {
+      const { client, create } = fakeClientSequence([RESPONSE]);
+      const source = createSupplierSource({ client });
+
+      const result = await source.search({ query: "lámina", region: "mx" });
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(result).toHaveLength(1);
+    });
+  });
+
+  describe("enrichContact", () => {
+    const NOW = "2026-07-01T00:00:00.000Z";
+
+    /** Proveedor persistido base para los tests de enriquecimiento. */
+    function makeSupplier(overrides: Partial<Supplier> = {}): Supplier {
+      return {
+        name: "Aceros del Norte",
+        website: "https://aceros.mx",
+        material: "lámina",
+        region: "mx",
+        trusted: true,
+        contact: {},
+        status: "pendiente",
+        firstSeen: NOW,
+        lastSeen: NOW,
+        ...overrides,
+      };
+    }
+
+    const CONTACT_RESPONSE = JSON.stringify({
+      contact: { email: "ventas@aceros.mx", phone: "+52 81 1234 5678" },
+    });
+
+    it("llama al modelo con la web del proveedor y devuelve el contacto encontrado", async () => {
+      const { client, create } = fakeClientSequence([CONTACT_RESPONSE]);
+      const source = createSupplierSource({ client });
+
+      const contact = await source.enrichContact(makeSupplier());
+
+      expect(create).toHaveBeenCalledTimes(1);
+      // El prompt de usuario menciona la web a visitar.
+      const call = create.mock.calls[0]?.[0] as { messages: { content: string }[] };
+      expect(call.messages[0]?.content).toContain("https://aceros.mx");
+      expect(contact).toEqual({ email: "ventas@aceros.mx", phone: "+52 81 1234 5678" });
+    });
+
+    it("devuelve SOLO los campos faltantes (no pisa los que el proveedor ya tiene)", async () => {
+      // Arrange: el proveedor ya tiene email; la respuesta trae email y phone.
+      const { client } = fakeClientSequence([CONTACT_RESPONSE]);
+      const source = createSupplierSource({ client });
+      const supplier = makeSupplier({ contact: { email: "existente@aceros.mx" } });
+
+      // Act
+      const contact = await source.enrichContact(supplier);
+
+      // Assert: el email de la respuesta se ignora; solo entra el phone.
+      expect(contact).toEqual({ phone: "+52 81 1234 5678" });
+    });
+
+    it("devuelve {} cuando el modelo no da texto utilizable", async () => {
+      const { client } = fakeClientSequence([""]);
+      const source = createSupplierSource({ client });
+
+      const contact = await source.enrichContact(makeSupplier());
+
+      expect(contact).toEqual({});
+    });
+
+    it("devuelve {} sin llamar al modelo cuando el proveedor no tiene website", async () => {
+      const { client, create } = fakeClientSequence([CONTACT_RESPONSE]);
+      const source = createSupplierSource({ client });
+
+      const contact = await source.enrichContact(makeSupplier({ website: undefined }));
+
+      expect(create).not.toHaveBeenCalled();
+      expect(contact).toEqual({});
+    });
   });
 });

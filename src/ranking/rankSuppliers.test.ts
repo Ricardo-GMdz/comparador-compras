@@ -10,6 +10,7 @@ function sup(o: Partial<Supplier>): Supplier {
     region: "mx",
     contact: {},
     trusted: true,
+    status: "pendiente",
     firstSeen: NOW,
     lastSeen: NOW,
     ...o,
@@ -42,6 +43,76 @@ describe("selectBestSupplier", () => {
       sup({ name: "c", region: "mx", wholesalePrice: 170, trusted: true }),
     ];
     expect(selectBestSupplier(list, "mx")?.name).toBe("a");
+  });
+});
+
+describe("selectBestSupplier — unidad dominante", () => {
+  it("con mayoría 'pieza', un 'kg' más barato no compite por precio", () => {
+    const list = [
+      sup({ name: "kg-barato", wholesalePrice: 10, priceUnit: "kg" }),
+      sup({ name: "pieza-barata", wholesalePrice: 150, priceUnit: "pieza" }),
+      sup({ name: "pieza-cara", wholesalePrice: 200, priceUnit: "pieza" }),
+    ];
+    expect(selectBestSupplier(list, "mx")?.name).toBe("pieza-barata");
+  });
+
+  it("unidad no dominante puede ser elegida si no hay alternativa con precio comparable en su nivel", () => {
+    const list = [
+      sup({
+        name: "conf-region-kg",
+        region: "mx",
+        trusted: true,
+        wholesalePrice: 500,
+        priceUnit: "kg",
+      }),
+      sup({
+        name: "otro-pieza-1",
+        region: "ar",
+        trusted: false,
+        wholesalePrice: 90,
+        priceUnit: "pieza",
+      }),
+      sup({
+        name: "otro-pieza-2",
+        region: "ar",
+        trusted: false,
+        wholesalePrice: 100,
+        priceUnit: "pieza",
+      }),
+    ];
+    // La unidad dominante es "pieza", pero el único confiable+región gana por nivel.
+    expect(selectBestSupplier(list, "mx")?.name).toBe("conf-region-kg");
+  });
+
+  it("comportamiento previo intacto cuando todos comparten unidad", () => {
+    const list = [
+      sup({ name: "caro", wholesalePrice: 200, priceUnit: "kg" }),
+      sup({ name: "barato", wholesalePrice: 150, priceUnit: "kg" }),
+    ];
+    expect(selectBestSupplier(list, "mx")?.name).toBe("barato");
+  });
+});
+
+describe("rankSuppliers — unidad dominante", () => {
+  it("ordena por precio solo dentro de la unidad dominante; el resto va al final", () => {
+    const list = [
+      sup({ name: "kg-barato", wholesalePrice: 10, priceUnit: "kg" }),
+      sup({ name: "pieza-cara", wholesalePrice: 200, priceUnit: "pieza" }),
+      sup({ name: "pieza-barata", wholesalePrice: 150, priceUnit: "pieza" }),
+    ];
+    expect(rankSuppliers(list, "mx").map((s) => s.name)).toEqual([
+      "pieza-barata",
+      "pieza-cara",
+      "kg-barato",
+    ]);
+  });
+
+  it("sin unidades declaradas, todos los precios compiten (comportamiento previo)", () => {
+    const list = [
+      sup({ name: "caro", wholesalePrice: 200 }),
+      sup({ name: "barato", wholesalePrice: 150 }),
+    ];
+    expect(rankSuppliers(list, "mx").map((s) => s.name)).toEqual(["barato", "caro"]);
   });
 });
 
