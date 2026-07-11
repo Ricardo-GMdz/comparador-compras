@@ -508,6 +508,28 @@
           </div>
         </div>
       </section>
+
+      <!-- Directorio público: se carga desde proveedores.json (publicado desde la app).
+           Si el archivo no existe, la sección queda oculta. -->
+      <section id="directorio" class="features wrap" hidden>
+        <div class="kicker">Directorio</div>
+        <h2>Proveedores trabajados</h2>
+        <div style="overflow-x: auto">
+          <table id="dir-tabla">
+            <thead>
+              <tr>
+                <th>Proveedor</th>
+                <th>Material</th>
+                <th>Mayoreo</th>
+                <th>Región</th>
+                <th>Contacto</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
     </main>
 
     <footer>
@@ -525,5 +547,82 @@
         >
       </div>
     </footer>
+
+    <script>
+      // Carga el directorio público (si fue publicado) y lo pinta escapando
+      // todo dato externo. Sin archivo → la sección queda oculta.
+      (function () {
+        var esc = function (v) {
+          return String(v == null ? "" : v).replace(/[&<>"']/g, function (ch) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+          });
+        };
+        var httpUrl = function (u) {
+          try {
+            var p = new URL(u);
+            return p.protocol === "http:" || p.protocol === "https:" ? p.href : null;
+          } catch (e) {
+            return null;
+          }
+        };
+        var contacto = function (s) {
+          var items = [];
+          var web = httpUrl(s.website);
+          if (web) items.push('<a href="' + esc(web) + '" target="_blank" rel="noopener">🌐</a>');
+          if (s.contact && s.contact.email)
+            items.push('<a href="mailto:' + esc(s.contact.email) + '">✉️</a>');
+          if (s.contact && s.contact.phone)
+            items.push('<a href="tel:' + esc(s.contact.phone) + '">📞</a>');
+          if (s.contact && s.contact.whatsapp)
+            items.push(
+              '<a href="https://wa.me/' +
+                esc(String(s.contact.whatsapp).replace(/[^0-9]/g, "")) +
+                '" target="_blank" rel="noopener">💬</a>',
+            );
+          var form = s.contact && httpUrl(s.contact.formUrl);
+          if (form) items.push('<a href="' + esc(form) + '" target="_blank" rel="noopener">📝</a>');
+          return items.join(" ");
+        };
+        var precio = function (s) {
+          if (s.wholesalePrice == null) return "—";
+          var unidad = s.priceUnit && s.priceUnit !== "unknown" ? " / " + esc(s.priceUnit) : "";
+          return "$" + esc(s.wholesalePrice) + (s.currency ? " " + esc(s.currency) : "") + unidad;
+        };
+        fetch("./proveedores.json")
+          .then(function (res) {
+            if (!res.ok) throw new Error("sin directorio");
+            return res.json();
+          })
+          .then(function (suppliers) {
+            if (!Array.isArray(suppliers) || suppliers.length === 0) return;
+            var rows = suppliers
+              .map(function (s) {
+                return (
+                  "<tr><td><strong>" +
+                  esc(s.name) +
+                  "</strong></td><td>" +
+                  esc(s.material) +
+                  "</td><td>" +
+                  precio(s) +
+                  "</td><td>" +
+                  esc(s.region) +
+                  "</td><td>" +
+                  contacto(s) +
+                  '</td><td><span class="chip ' +
+                  (s.status === "cotizó" ? "chip-green" : "chip-indigo") +
+                  '">' +
+                  esc(s.status) +
+                  "</span></td></tr>"
+                );
+              })
+              .join("");
+            document.querySelector("#dir-tabla tbody").innerHTML = rows;
+            document.getElementById("directorio").hidden = false;
+          })
+          .catch(function () {
+            /* sin proveedores.json publicado: la sección queda oculta */
+          });
+      })();
+    </script>
   </body>
 </html>
