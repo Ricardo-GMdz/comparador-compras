@@ -74,6 +74,7 @@ export function mergeSuppliers(
         ...candidate,
         contact: { ...prev.contact, ...candidate.contact },
         status: prev.status,
+        ...(prev.favorite !== undefined ? { favorite: prev.favorite } : {}),
         ...(prev.notes !== undefined
           ? { notes: prev.notes }
           : candidate.notes !== undefined
@@ -158,6 +159,9 @@ const supplierSchema = z.object({
   contact: contactSchema,
   trusted: z.boolean(),
   notes: z.string().optional(),
+  catalogPrice: z.number().optional(),
+  address: z.string().optional(),
+  favorite: z.boolean().optional(),
   // Migración: los directorios pre-v2.1 no traen `status`; entran como "pendiente".
   status: z.enum(["pendiente", "contactado", "cotizó", "descartado"]).default("pendiente"),
   firstSeen: z.string(),

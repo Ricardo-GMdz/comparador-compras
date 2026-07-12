@@ -6,6 +6,7 @@ import {
   removeSupplier,
   loadDirectory,
   saveDirectory,
+  directorySchema,
 } from "./store.js";
 import type { SupplierCandidate, Supplier } from "../domain/supplier.js";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -360,5 +361,80 @@ describe("loadDirectory / saveDirectory", () => {
     const reloaded = await loadDirectory(path);
     expect(reloaded).toEqual(suppliers);
     rmSync(tmp, { recursive: true, force: true });
+  });
+});
+
+describe("v2.2: catalogPrice, address y favorite", () => {
+  const NOW = "2026-07-01T00:00:00.000Z";
+
+  it("loadDirectory hace round-trip con catalogPrice, address y favorite", () => {
+    const parsed = directorySchema.parse([
+      {
+        name: "Master Supply",
+        material: "Extech 475040",
+        region: "mx",
+        trusted: true,
+        contact: {},
+        status: "pendiente",
+        catalogPrice: 439.99,
+        currency: "USD",
+        address: "Monterrey, NL",
+        favorite: true,
+        firstSeen: NOW,
+        lastSeen: NOW,
+      },
+    ]);
+    expect(parsed[0]?.catalogPrice).toBe(439.99);
+    expect(parsed[0]?.address).toBe("Monterrey, NL");
+    expect(parsed[0]?.favorite).toBe(true);
+  });
+
+  it("un directorio viejo sin los campos nuevos carga igual (favorite ausente)", () => {
+    const parsed = directorySchema.parse([
+      {
+        name: "Viejo",
+        material: "m",
+        region: "mx",
+        trusted: false,
+        contact: {},
+        status: "pendiente",
+        firstSeen: NOW,
+        lastSeen: NOW,
+      },
+    ]);
+    expect(parsed[0]?.favorite).toBeUndefined();
+    expect(parsed[0]?.catalogPrice).toBeUndefined();
+  });
+
+  it("mergeSuppliers conserva favorite del existente y actualiza catalogPrice/address del candidato", () => {
+    const existing = [
+      {
+        name: "Master Supply",
+        website: "https://mastersupply.mx",
+        material: "Extech 475040",
+        region: "mx",
+        trusted: true,
+        contact: {},
+        status: "contactado" as const,
+        favorite: true,
+        firstSeen: NOW,
+        lastSeen: NOW,
+      },
+    ];
+    const candidate = {
+      name: "Master Supply",
+      website: "https://mastersupply.mx",
+      material: "Extech 475040",
+      region: "mx",
+      trusted: true,
+      contact: {},
+      catalogPrice: 439.99,
+      address: "Monterrey, NL",
+    };
+    const { suppliers } = mergeSuppliers(existing, [candidate], "2026-07-02T00:00:00.000Z");
+    expect(suppliers[0]?.favorite).toBe(true);
+    expect(suppliers[0]?.status).toBe("contactado");
+    expect(suppliers[0]?.catalogPrice).toBe(439.99);
+    expect(suppliers[0]?.address).toBe("Monterrey, NL");
   });
 });

@@ -30,6 +30,10 @@ export interface SupplierCandidate {
   wholesalePrice?: number;
   /** Unidad del precio (ej. por kg vs por pieza); ausente si no se conoce. */
   priceUnit?: PriceUnit;
+  /** Precio de catálogo/lista publicado (distinto del mayoreo). */
+  catalogPrice?: number;
+  /** Dirección o ciudad publicada del proveedor. */
+  address?: string;
   /** Disponibilidad/stock reportada; ausente si no se conoce. */
   availability?: Availability;
   currency?: string;
@@ -45,6 +49,8 @@ export interface SupplierCandidate {
 export interface Supplier extends SupplierCandidate {
   /** Estado de gestión; los persistidos viejos migran a "pendiente" al leer. */
   status: SupplierStatus;
+  /** Marca de favorito del usuario (gestión manual; el sourcing no la toca). */
+  favorite?: boolean;
   firstSeen: string;
   lastSeen: string;
 }
