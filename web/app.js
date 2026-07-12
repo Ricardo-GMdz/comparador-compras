@@ -92,6 +92,21 @@ function price(s) {
   return `$${esc(s.wholesalePrice)}${currency}${unit}`;
 }
 
+// Precio de catálogo (lista) con moneda; "—" si no hay.
+function catalogPrice(s) {
+  if (s.catalogPrice === undefined) return "—";
+  const currency = s.currency ? " " + esc(s.currency) : "";
+  const unit = s.priceUnit && s.priceUnit !== "unknown" ? ` / ${esc(s.priceUnit)}` : "";
+  return `$${esc(s.catalogPrice)}${currency}${unit}`;
+}
+
+// Precio numérico efectivo para ordenar: mayoreo si hay, si no catálogo; Infinity si ninguno.
+function precioEfectivo(s) {
+  if (typeof s.wholesalePrice === "number") return s.wholesalePrice;
+  if (typeof s.catalogPrice === "number") return s.catalogPrice;
+  return Infinity;
+}
+
 // Chip de disponibilidad (stock); vacío cuando es desconocida.
 function stockChip(s) {
   if (s.availability === "disponible") return '<span class="chip chip-green">stock</span>';
@@ -121,8 +136,10 @@ function estadoSelect(s, key) {
   return `<select class="estado-select" data-key="${esc(key)}">${options}</select>`;
 }
 
-function accionesFor(key) {
+function accionesFor(s, key) {
+  const star = s.favorite ? "★" : "☆";
   return `
+    <button type="button" class="fav ${s.favorite ? "fav-on" : ""}" data-action="favorito" data-key="${esc(key)}" title="Favorito">${star}</button>
     <button type="button" data-action="cotizar" data-key="${esc(key)}">✉️ Cotizar</button>
     <button type="button" data-action="enriquecer" data-key="${esc(key)}">🔍 Completar</button>
     <button type="button" data-action="borrar" data-key="${esc(key)}">🗑</button>`;
@@ -134,7 +151,7 @@ function renderTable(suppliers) {
       const key = keyOf(s);
       return `
     <tr class="${s.status === "descartado" ? "row-descartado" : ""}">
-      <td><strong>${esc(s.name)}</strong></td>
+      <td><a href="#" class="nombre-link" data-action="detalle" data-key="${esc(key)}">${esc(s.name)}</a></td>
       <td><span class="tag">${esc(s.material)}</span></td>
       <td>${price(s)} ${stockChip(s)}</td>
       <td>${s.moq !== undefined ? esc(s.moq) : "—"}</td>
@@ -143,7 +160,7 @@ function renderTable(suppliers) {
       <td><span class="chip ${s.trusted ? "chip-green" : "chip-amber"}">${s.trusted ? "Confiable" : "Sin verificar"}</span></td>
       <td>${estadoSelect(s, key)}</td>
       <td class="notas" data-action="notas" data-key="${esc(key)}" title="Click para editar">${s.notes ? esc(s.notes) : "＋ nota"}</td>
-      <td class="acciones">${accionesFor(key)}</td>
+      <td class="acciones">${accionesFor(s, key)}</td>
     </tr>`;
     })
     .join("");
@@ -156,18 +173,32 @@ function renderTable(suppliers) {
     </tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-// Filtro client-side por texto (nombre/material) y estado.
+// Filtro client-side por texto, estado y favoritos; luego ordena.
 function filtrados() {
   const texto = $("filtro").value.trim().toLowerCase();
   const estado = $("filtroEstado").value;
-  return directorio.filter((s) => {
+  const soloFav = $("soloFav").checked;
+  const orden = $("orden").value;
+  const lista = directorio.filter((s) => {
     const matchTexto =
       texto === "" ||
       s.name.toLowerCase().includes(texto) ||
       s.material.toLowerCase().includes(texto);
     const matchEstado = estado === "todos" || s.status === estado;
-    return matchTexto && matchEstado;
+    const matchFav = !soloFav || s.favorite === true;
+    return matchTexto && matchEstado && matchFav;
   });
+  const ordenada = [...lista];
+  if (orden === "precio") {
+    ordenada.sort((a, b) => precioEfectivo(a) - precioEfectivo(b));
+  } else if (orden === "favoritos") {
+    ordenada.sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0));
+  } else if (orden === "nombre") {
+    ordenada.sort((a, b) => a.name.localeCompare(b.name));
+  } else {
+    ordenada.sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? ""));
+  }
+  return ordenada;
 }
 
 function render() {
@@ -336,6 +367,42 @@ async function copiarMensaje() {
   }, 1500);
 }
 
+// --- Modal de detalle ---
+
+function fila(label, valor) {
+  if (valor === undefined || valor === "" || valor === "—") return "";
+  return `<div class="d-fila"><span class="d-label">${esc(label)}</span><span class="d-val">${valor}</span></div>`;
+}
+
+function abrirDetalle(s) {
+  $("dTitulo").textContent = s.name;
+  const stock =
+    s.availability === "disponible"
+      ? "En stock"
+      : s.availability === "sobre_pedido"
+        ? "Sobre pedido"
+        : "—";
+  $("dCuerpo").innerHTML = [
+    fila("Material", esc(s.material)),
+    fila("Mayoreo", price(s)),
+    fila("Catálogo", catalogPrice(s)),
+    fila("Mínimo de compra", s.moq !== undefined ? esc(s.moq) : "—"),
+    fila("Stock", stock),
+    fila("Dirección", s.address ? esc(s.address) : "—"),
+    fila("Región", esc(s.region)),
+    fila("Confianza", s.trusted ? "Confiable" : "Sin verificar"),
+    fila("Estado", esc(s.status)),
+    fila("Contacto", contactFor(s) || "—"),
+    fila("Notas", s.notes ? esc(s.notes) : "—"),
+    fila("Envío", "Se consulta en la cotización"),
+  ].join("");
+  $("detalle").classList.remove("hidden");
+}
+
+function cerrarDetalle() {
+  $("detalle").classList.add("hidden");
+}
+
 // --- Eventos ---
 
 $("buscar").addEventListener("submit", async (e) => {
@@ -367,6 +434,8 @@ $("buscar").addEventListener("submit", async (e) => {
 
 $("filtro").addEventListener("input", render);
 $("filtroEstado").addEventListener("change", render);
+$("orden").addEventListener("change", render);
+$("soloFav").addEventListener("change", render);
 
 $("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -434,6 +503,12 @@ $("tabla").addEventListener("click", (e) => {
     enriquecerProveedor(key, el);
   } else if (el.dataset.action === "borrar") {
     if (confirm(`¿Borrar a "${supplier.name}" del directorio?`)) borrarProveedor(key);
+  } else if (el.dataset.action === "favorito") {
+    e.preventDefault();
+    patchProveedor(key, { favorite: !supplier.favorite });
+  } else if (el.dataset.action === "detalle") {
+    e.preventDefault();
+    abrirDetalle(supplier);
   }
 });
 
@@ -443,6 +518,11 @@ $("mCopiar").addEventListener("click", copiarMensaje);
 $("mCerrar").addEventListener("click", cerrarCotizacion);
 $("modal").addEventListener("click", (e) => {
   if (e.target === $("modal")) cerrarCotizacion();
+});
+
+$("dCerrar").addEventListener("click", cerrarDetalle);
+$("detalle").addEventListener("click", (e) => {
+  if (e.target === $("detalle")) cerrarDetalle();
 });
 
 cargarDirectorio();
