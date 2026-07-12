@@ -39,8 +39,14 @@ export function verifyToken(
   if (dot <= 0) {
     return false;
   }
-  const exp = Number(token.slice(0, dot));
+  const expRaw = token.slice(0, dot);
   const signature = token.slice(dot + 1);
+  // Exigimos exp canónico (solo dígitos): evita variantes maleables como
+  // "+123", " 123" o "123 " que Number() aceptaría reusando una firma válida.
+  if (!/^\d+$/.test(expRaw)) {
+    return false;
+  }
+  const exp = Number(expRaw);
   if (!Number.isFinite(exp) || exp < nowMs) {
     return false;
   }

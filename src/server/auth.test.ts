@@ -33,5 +33,18 @@ describe("auth", () => {
     expect(verifyToken("basura-sin-punto", SECRET, NOW)).toBe(false);
     const token = makeToken(NOW + DAY, SECRET);
     expect(verifyToken(token + "x", SECRET, NOW)).toBe(false);
+    expect(verifyToken("NaN.firma", SECRET, NOW)).toBe(false);
+    expect(verifyToken("-100.firma", SECRET, NOW)).toBe(false);
+    expect(verifyToken(".firma", SECRET, NOW)).toBe(false);
+    // Firma vacía (token "exp.") también se rechaza.
+    expect(verifyToken(`${NOW + DAY}.`, SECRET, NOW)).toBe(false);
+    // Token canónico válido no se rompe con el parseo estricto.
+    const canon = makeToken(NOW + DAY, SECRET);
+    expect(verifyToken(canon, SECRET, NOW)).toBe(true);
+    // Variantes no canónicas del mismo exp NO validan aunque reusen la firma.
+    const dot = canon.indexOf(".");
+    const sig = canon.slice(dot + 1);
+    expect(verifyToken(`+${NOW + DAY}.${sig}`, SECRET, NOW)).toBe(false);
+    expect(verifyToken(` ${NOW + DAY}.${sig}`, SECRET, NOW)).toBe(false);
   });
 });
