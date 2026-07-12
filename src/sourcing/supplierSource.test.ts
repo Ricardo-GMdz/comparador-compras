@@ -165,33 +165,21 @@ describe("createSupplierSource — searchBudget", () => {
   const emptyJson = JSON.stringify({ suppliers: [] });
 
   // Forma mínima de los argumentos de messages.create que asertamos.
-  // tools es tupla no-vacía para que tools[0] no sea opcional bajo strict.
-  type ToolArg = { max_uses: number };
-  interface CreateArgs {
-    max_tokens: number;
-    thinking: unknown;
-    tools: [ToolArg, ...ToolArg[]];
-  }
-
-  // Cliente Anthropic mockeado local: captura los argumentos de messages.create.
-  function fakeClient(text: string) {
-    const create = vi.fn(async (_params: CreateArgs) => ({ content: [{ type: "text", text }] }));
-    return { client: { messages: { create } } as never, create };
-  }
+  type CreateArgs = { max_tokens: number; thinking: unknown; tools: { max_uses: number }[] };
 
   it("sin searchBudget usa los defaults (adaptive, 5 usos, 1 reintento)", async () => {
-    const { client, create } = fakeClient(emptyJson);
+    const { client, create } = fakeClientSequence([emptyJson]);
     const source = createSupplierSource({ client });
     await source.search({ query: "láminas", region: "mx" });
     // Vacío + default → reintenta: 2 llamadas.
     expect(create).toHaveBeenCalledTimes(2);
     const args = create.mock.calls[0]?.[0] as CreateArgs;
     expect(args.thinking).toEqual({ type: "adaptive" });
-    expect(args.tools[0].max_uses).toBe(5);
+    expect(args.tools[0]?.max_uses).toBe(5);
   });
 
   it("con searchBudget acota usos/thinking y NO reintenta si maxEmptyRetries=0", async () => {
-    const { client, create } = fakeClient(emptyJson);
+    const { client, create } = fakeClientSequence([emptyJson]);
     const source = createSupplierSource({
       client,
       searchBudget: { maxWebSearchUses: 2, maxEmptyRetries: 0, maxTokens: 8000, thinkingBudgetTokens: 2000 },
@@ -202,6 +190,6 @@ describe("createSupplierSource — searchBudget", () => {
     const args = create.mock.calls[0]?.[0] as CreateArgs;
     expect(args.thinking).toEqual({ type: "enabled", budget_tokens: 2000 });
     expect(args.max_tokens).toBe(8000);
-    expect(args.tools[0].max_uses).toBe(2);
+    expect(args.tools[0]?.max_uses).toBe(2);
   });
 });
