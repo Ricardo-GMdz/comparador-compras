@@ -470,7 +470,14 @@ describe("API — auth y público", () => {
   it("GET /api/publico responde sin clave, con CORS, y solo campos públicos", async () => {
     const { deps } = fakeDeps();
     deps.loadPublicDirectory = vi.fn(async () => [
-      { name: "Pub", material: "m", region: "mx", contact: {}, trusted: true, status: "contactado" },
+      {
+        name: "Pub",
+        material: "m",
+        region: "mx",
+        contact: {},
+        trusted: true,
+        status: "contactado",
+      },
     ]);
     const app = buildApi({ ...deps, auth: { accessKey: "secreta", now: () => NOW_MS } });
     const res = await app.request("/api/publico");

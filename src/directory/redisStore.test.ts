@@ -20,7 +20,9 @@ function makeSupplier(overrides: Partial<Supplier> = {}): Supplier {
 }
 
 /** Redis en memoria para el test (implementa RedisLike). */
-function fakeRedis(seed: Record<string, string> = {}): RedisLike & { data: Record<string, string> } {
+function fakeRedis(
+  seed: Record<string, string> = {},
+): RedisLike & { data: Record<string, string> } {
   const data: Record<string, string> = { ...seed };
   return {
     data,
@@ -49,7 +51,15 @@ describe("redisStore", () => {
 
   it("valida con zod y migra un supplier sin status a 'pendiente'", async () => {
     const legacy = JSON.stringify([
-      { name: "Viejo", material: "m", region: "mx", trusted: false, contact: {}, firstSeen: NOW, lastSeen: NOW },
+      {
+        name: "Viejo",
+        material: "m",
+        region: "mx",
+        trusted: false,
+        contact: {},
+        firstSeen: NOW,
+        lastSeen: NOW,
+      },
     ]);
     const store = createRedisStore(fakeRedis({ directorio: legacy }));
     const loaded = await store.loadDirectory("x");
@@ -65,7 +75,14 @@ describe("redisStore", () => {
     const redis = fakeRedis();
     const store = createRedisStore(redis);
     const publicos: PublicSupplier[] = [
-      { name: "Pub", material: "m", region: "mx", contact: {}, trusted: true, status: "contactado" },
+      {
+        name: "Pub",
+        material: "m",
+        region: "mx",
+        contact: {},
+        trusted: true,
+        status: "contactado",
+      },
     ];
     await store.savePublicDirectory(publicos);
     expect(await store.loadPublicDirectory()).toEqual(publicos);

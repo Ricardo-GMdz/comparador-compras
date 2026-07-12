@@ -401,7 +401,8 @@ $("publicar").addEventListener("click", async () => {
       $("status").textContent = data.error ?? "No se pudo publicar.";
       return;
     }
-    $("status").textContent = `${data.publicados} proveedores publicados — ya visibles en la landing.`;
+    $("status").textContent =
+      `${data.publicados} proveedores publicados — ya visibles en la landing.`;
   } catch (e) {
     if (e && e.message === "no-autorizado") return;
     $("status").textContent = "No se pudo publicar.";

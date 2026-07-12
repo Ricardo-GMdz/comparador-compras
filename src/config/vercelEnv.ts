@@ -14,9 +14,12 @@ export interface VercelEnv {
 }
 
 const required = (name: string) =>
-  z.string({ message: `Falta la variable de entorno ${name}` }).trim().min(1, {
-    message: `${name} no puede estar vacía`,
-  });
+  z
+    .string({ message: `Falta la variable de entorno ${name}` })
+    .trim()
+    .min(1, {
+      message: `${name} no puede estar vacía`,
+    });
 
 const schema = z.object({
   ANTHROPIC_API_KEY: required("ANTHROPIC_API_KEY"),

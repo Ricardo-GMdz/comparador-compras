@@ -182,7 +182,12 @@ describe("createSupplierSource — searchBudget", () => {
     const { client, create } = fakeClientSequence([emptyJson]);
     const source = createSupplierSource({
       client,
-      searchBudget: { maxWebSearchUses: 2, maxEmptyRetries: 0, maxTokens: 8000, thinkingBudgetTokens: 2000 },
+      searchBudget: {
+        maxWebSearchUses: 2,
+        maxEmptyRetries: 0,
+        maxTokens: 8000,
+        thinkingBudgetTokens: 2000,
+      },
     });
     await source.search({ query: "láminas", region: "mx" });
     // maxEmptyRetries=0 → una sola llamada aunque venga vacío.

@@ -28,9 +28,9 @@ const redis = new Redis({ url: env.upstashUrl, token: env.upstashToken });
 // reusar el parseo zod del store (que espera texto JSON).
 const redisLike = {
   get: (key: string): Promise<string | null> =>
-    redis.get<unknown>(key).then((v) =>
-      v == null ? null : typeof v === "string" ? v : JSON.stringify(v),
-    ),
+    redis
+      .get<unknown>(key)
+      .then((v) => (v == null ? null : typeof v === "string" ? v : JSON.stringify(v))),
   set: (key: string, value: string): Promise<unknown> => redis.set(key, value),
 };
 const store = createRedisStore(redisLike);

@@ -27,11 +27,7 @@ export function makeToken(expMs: number, secret: string): string {
 }
 
 /** Verifica firma y vencimiento del token. */
-export function verifyToken(
-  token: string | undefined,
-  secret: string,
-  nowMs: number,
-): boolean {
+export function verifyToken(token: string | undefined, secret: string, nowMs: number): boolean {
   if (!token) {
     return false;
   }

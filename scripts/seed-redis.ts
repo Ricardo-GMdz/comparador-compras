@@ -20,10 +20,14 @@ async function main(): Promise<void> {
   const redis = new Redis({ url, token });
   await redis.set("directorio", JSON.stringify(suppliers));
 
-  process.stdout.write(`Sembrados ${suppliers.length} proveedores en Redis (clave "directorio").\n`);
+  process.stdout.write(
+    `Sembrados ${suppliers.length} proveedores en Redis (clave "directorio").\n`,
+  );
 }
 
 main().catch((error) => {
-  process.stderr.write(`Error sembrando Redis: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(
+    `Error sembrando Redis: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
   process.exitCode = 1;
 });

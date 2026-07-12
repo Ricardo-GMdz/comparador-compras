@@ -22,7 +22,7 @@ export interface RedisLike {
   set(key: string, value: string): Promise<unknown>;
 }
 export function createRedisStore(redis: RedisLike): {
-  loadDirectory: (path: string) => Promise<readonly Supplier[]>;      // ignora `path`, usa clave fija
+  loadDirectory: (path: string) => Promise<readonly Supplier[]>; // ignora `path`, usa clave fija
   saveDirectory: (path: string, suppliers: readonly Supplier[]) => Promise<void>;
   loadPublicDirectory: () => Promise<readonly PublicSupplier[]>;
   savePublicDirectory: (suppliers: readonly PublicSupplier[]) => Promise<void>;
@@ -43,7 +43,7 @@ export interface SupplierSourceDeps {
 
 // server/auth.ts
 export const COOKIE_NAME = "cc_auth";
-export function hashEqual(a: string, b: string): boolean;         // comparación en tiempo constante
+export function hashEqual(a: string, b: string): boolean; // comparación en tiempo constante
 export function makeToken(expMs: number, secret: string): string;
 export function verifyToken(token: string | undefined, secret: string, nowMs: number): boolean;
 
@@ -67,6 +67,7 @@ export function loadVercelEnv(): VercelEnv;
 ## Task 1: Exportar el schema del directorio + store de Redis
 
 **Files:**
+
 - Modify: `src/directory/store.ts` (exportar `directorySchema`)
 - Create: `src/directory/redisStore.ts`
 - Test: `src/directory/redisStore.test.ts`
@@ -112,7 +113,9 @@ function makeSupplier(overrides: Partial<Supplier> = {}): Supplier {
 }
 
 /** Redis en memoria para el test (implementa RedisLike). */
-function fakeRedis(seed: Record<string, string> = {}): RedisLike & { data: Record<string, string> } {
+function fakeRedis(
+  seed: Record<string, string> = {},
+): RedisLike & { data: Record<string, string> } {
   const data: Record<string, string> = { ...seed };
   return {
     data,
@@ -141,7 +144,15 @@ describe("redisStore", () => {
 
   it("valida con zod y migra un supplier sin status a 'pendiente'", async () => {
     const legacy = JSON.stringify([
-      { name: "Viejo", material: "m", region: "mx", trusted: false, contact: {}, firstSeen: NOW, lastSeen: NOW },
+      {
+        name: "Viejo",
+        material: "m",
+        region: "mx",
+        trusted: false,
+        contact: {},
+        firstSeen: NOW,
+        lastSeen: NOW,
+      },
     ]);
     const store = createRedisStore(fakeRedis({ directorio: legacy }));
     const loaded = await store.loadDirectory("x");
@@ -157,7 +168,14 @@ describe("redisStore", () => {
     const redis = fakeRedis();
     const store = createRedisStore(redis);
     const publicos: PublicSupplier[] = [
-      { name: "Pub", material: "m", region: "mx", contact: {}, trusted: true, status: "contactado" },
+      {
+        name: "Pub",
+        material: "m",
+        region: "mx",
+        contact: {},
+        trusted: true,
+        status: "contactado",
+      },
     ];
     await store.savePublicDirectory(publicos);
     expect(await store.loadPublicDirectory()).toEqual(publicos);
@@ -247,6 +265,7 @@ rtk git commit -m "feat: store del directorio respaldado por Redis (Upstash)"
 ## Task 2: Presupuesto de búsqueda acotado en el sourcing
 
 **Files:**
+
 - Modify: `src/sourcing/supplierSource.ts`
 - Test: `src/sourcing/supplierSource.test.ts` (agregar casos)
 
@@ -282,7 +301,12 @@ describe("createSupplierSource — searchBudget", () => {
     const { client, create } = fakeClient(emptyJson);
     const source = createSupplierSource({
       client,
-      searchBudget: { maxWebSearchUses: 2, maxEmptyRetries: 0, maxTokens: 8000, thinkingBudgetTokens: 2000 },
+      searchBudget: {
+        maxWebSearchUses: 2,
+        maxEmptyRetries: 0,
+        maxTokens: 8000,
+        thinkingBudgetTokens: 2000,
+      },
     });
     await source.search({ query: "láminas", region: "mx" });
     // maxEmptyRetries=0 → una sola llamada aunque venga vacío.
@@ -332,16 +356,17 @@ export interface SupplierSourceDeps {
 3c. Dentro de `createSupplierSource`, al inicio de la función (antes de `searchOnce`), resolver los valores efectivos:
 
 ```ts
-  const maxWebSearchUses = deps.searchBudget?.maxWebSearchUses ?? MAX_WEB_SEARCH_USES;
-  const maxEmptyRetries = deps.searchBudget?.maxEmptyRetries ?? MAX_EMPTY_RETRIES;
-  const maxTokens = deps.searchBudget?.maxTokens ?? MAX_TOKENS;
-  const thinking =
-    deps.searchBudget?.thinkingBudgetTokens !== undefined
-      ? ({ type: "enabled", budget_tokens: deps.searchBudget.thinkingBudgetTokens } as const)
-      : ({ type: "adaptive" } as const);
+const maxWebSearchUses = deps.searchBudget?.maxWebSearchUses ?? MAX_WEB_SEARCH_USES;
+const maxEmptyRetries = deps.searchBudget?.maxEmptyRetries ?? MAX_EMPTY_RETRIES;
+const maxTokens = deps.searchBudget?.maxTokens ?? MAX_TOKENS;
+const thinking =
+  deps.searchBudget?.thinkingBudgetTokens !== undefined
+    ? ({ type: "enabled", budget_tokens: deps.searchBudget.thinkingBudgetTokens } as const)
+    : ({ type: "adaptive" } as const);
 ```
 
 3d. En `searchOnce`, reemplazar en el `messages.create`:
+
 - `max_tokens: MAX_TOKENS,` → `max_tokens: maxTokens,`
 - `thinking: { type: "adaptive" },` → `thinking,`
 - `max_uses: MAX_WEB_SEARCH_USES` → `max_uses: maxWebSearchUses`
@@ -349,22 +374,22 @@ export interface SupplierSourceDeps {
 3e. En `search`, reemplazar las dos referencias a `MAX_EMPTY_RETRIES` por la local `maxEmptyRetries`:
 
 ```ts
-  async function search(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
-    for (let attempt = 0; attempt <= maxEmptyRetries; attempt += 1) {
-      const candidates = await searchOnce(q);
-      if (candidates.length > 0) {
-        return candidates;
-      }
-      if (attempt < maxEmptyRetries) {
-        logger.warn("sourcing: búsqueda sin proveedores, reintentando", {
-          query: q.query,
-          region: q.region,
-          attempt: attempt + 1,
-        });
-      }
+async function search(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
+  for (let attempt = 0; attempt <= maxEmptyRetries; attempt += 1) {
+    const candidates = await searchOnce(q);
+    if (candidates.length > 0) {
+      return candidates;
     }
-    return [];
+    if (attempt < maxEmptyRetries) {
+      logger.warn("sourcing: búsqueda sin proveedores, reintentando", {
+        query: q.query,
+        region: q.region,
+        attempt: attempt + 1,
+      });
+    }
   }
+  return [];
+}
 ```
 
 - [ ] **Step 4: Correr el test y verificar que pasa**
@@ -385,6 +410,7 @@ rtk git commit -m "feat: searchBudget opcional para acotar la búsqueda en deplo
 ## Task 3: Helpers de clave de acceso (firma y verificación de token)
 
 **Files:**
+
 - Create: `src/server/auth.ts`
 - Test: `src/server/auth.test.ts`
 
@@ -471,11 +497,7 @@ export function makeToken(expMs: number, secret: string): string {
 }
 
 /** Verifica firma y vencimiento del token. */
-export function verifyToken(
-  token: string | undefined,
-  secret: string,
-  nowMs: number,
-): boolean {
+export function verifyToken(token: string | undefined, secret: string, nowMs: number): boolean {
   if (!token) {
     return false;
   }
@@ -510,6 +532,7 @@ rtk git commit -m "feat: firma/verificación de la cookie de clave de acceso"
 ## Task 4: Montar auth + endpoint público en la API
 
 **Files:**
+
 - Modify: `src/server/api.ts`
 - Test: `src/server/api.test.ts`
 
@@ -567,7 +590,14 @@ describe("API — auth y público", () => {
   it("GET /api/publico responde sin clave, con CORS, y solo campos públicos", async () => {
     const { deps } = fakeDeps();
     deps.loadPublicDirectory = vi.fn(async () => [
-      { name: "Pub", material: "m", region: "mx", contact: {}, trusted: true, status: "contactado" },
+      {
+        name: "Pub",
+        material: "m",
+        region: "mx",
+        contact: {},
+        trusted: true,
+        status: "contactado",
+      },
     ]);
     const app = buildApi({ ...deps, auth: { accessKey: "secreta", now: () => NOW_MS } });
     const res = await app.request("/api/publico");
@@ -620,49 +650,49 @@ const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 3d. Al inicio de `buildApi`, justo después de `const app = new Hono();`, montar auth y login SOLO si `deps.auth` está presente. Debe ir ANTES de registrar las rutas protegidas:
 
 ```ts
-  if (deps.auth !== undefined) {
-    const { accessKey } = deps.auth;
-    const now = deps.auth.now ?? (() => Date.now());
+if (deps.auth !== undefined) {
+  const { accessKey } = deps.auth;
+  const now = deps.auth.now ?? (() => Date.now());
 
-    // Middleware: exige cookie válida en /api/* (menos login y público).
-    app.use("*", async (c, next) => {
-      const path = new URL(c.req.url).pathname;
-      if (!path.startsWith("/api/") || PUBLIC_PATHS.has(path)) {
-        return next();
-      }
-      if (verifyToken(getCookie(c, COOKIE_NAME), accessKey, now())) {
-        return next();
-      }
-      return c.json({ ok: false, error: "No autorizado. Ingresá la clave de acceso." }, 401);
-    });
+  // Middleware: exige cookie válida en /api/* (menos login y público).
+  app.use("*", async (c, next) => {
+    const path = new URL(c.req.url).pathname;
+    if (!path.startsWith("/api/") || PUBLIC_PATHS.has(path)) {
+      return next();
+    }
+    if (verifyToken(getCookie(c, COOKIE_NAME), accessKey, now())) {
+      return next();
+    }
+    return c.json({ ok: false, error: "No autorizado. Ingresá la clave de acceso." }, 401);
+  });
 
-    app.post("/api/login", async (c) => {
-      const body = (await c.req.json().catch(() => ({}))) as { key?: unknown };
-      const key = typeof body.key === "string" ? body.key : "";
-      if (!hashEqual(key, accessKey)) {
-        return c.json({ ok: false, error: "Clave incorrecta." }, 401);
-      }
-      const exp = now() + SESSION_MS;
-      setCookie(c, COOKIE_NAME, makeToken(exp, accessKey), {
-        httpOnly: true,
-        secure: true,
-        sameSite: "Lax",
-        maxAge: SESSION_MS / 1000,
-        path: "/",
-      });
-      return c.json({ ok: true });
+  app.post("/api/login", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { key?: unknown };
+    const key = typeof body.key === "string" ? body.key : "";
+    if (!hashEqual(key, accessKey)) {
+      return c.json({ ok: false, error: "Clave incorrecta." }, 401);
+    }
+    const exp = now() + SESSION_MS;
+    setCookie(c, COOKIE_NAME, makeToken(exp, accessKey), {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      maxAge: SESSION_MS / 1000,
+      path: "/",
     });
-  }
+    return c.json({ ok: true });
+  });
+}
 ```
 
 3e. Agregar el endpoint público (sin clave). Ubicarlo junto a las otras rutas GET, por ejemplo después de `/api/directorio.csv`:
 
 ```ts
-  // Directorio público (sin clave): la landing lo consume. CORS abierto a propósito.
-  app.get("/api/publico", async (c) => {
-    const publicSuppliers = await deps.loadPublicDirectory();
-    return c.json(publicSuppliers, 200, { "access-control-allow-origin": "*" });
-  });
+// Directorio público (sin clave): la landing lo consume. CORS abierto a propósito.
+app.get("/api/publico", async (c) => {
+  const publicSuppliers = await deps.loadPublicDirectory();
+  return c.json(publicSuppliers, 200, { "access-control-allow-origin": "*" });
+});
 ```
 
 - [ ] **Step 4: Correr el test y verificar que pasa**
@@ -683,6 +713,7 @@ rtk git commit -m "feat: middleware de clave de acceso y endpoint público en la
 ## Task 5: Pantalla de clave en el frontend + manejo de 401
 
 **Files:**
+
 - Modify: `web/index.html`
 - Modify: `web/app.js`
 
@@ -693,15 +724,21 @@ Nota: `web/` no tiene tests automatizados (es vanilla servido estático); esta t
 Dentro de `<main class="wrap">`, como primer hijo (antes de `<header class="topbar">`), agregar:
 
 ```html
-      <div id="login" class="login-overlay hidden">
-        <form id="loginForm" class="login-card">
-          <h2>Clave de acceso</h2>
-          <p class="login-hint">Esta app consume tokens; ingresá la clave compartida.</p>
-          <input id="loginKey" class="input" type="password" placeholder="Clave" autocomplete="current-password" />
-          <button class="btn" type="submit">Entrar</button>
-          <div id="loginError" class="login-error"></div>
-        </form>
-      </div>
+<div id="login" class="login-overlay hidden">
+  <form id="loginForm" class="login-card">
+    <h2>Clave de acceso</h2>
+    <p class="login-hint">Esta app consume tokens; ingresá la clave compartida.</p>
+    <input
+      id="loginKey"
+      class="input"
+      type="password"
+      placeholder="Clave"
+      autocomplete="current-password"
+    />
+    <button class="btn" type="submit">Entrar</button>
+    <div id="loginError" class="login-error"></div>
+  </form>
+</div>
 ```
 
 - [ ] **Step 2: Estilos mínimos del overlay en `web/styles.css`**
@@ -767,7 +804,7 @@ function ocultarLogin() {
 
 - [ ] **Step 4: Usar `apiFetch` en todas las llamadas a la API**
 
-En `web/app.js`, reemplazar cada `fetch("/api/...")` o `` fetch(`/api/...`) `` por `apiFetch(...)` en estas funciones: `cargarDirectorio`, `patchProveedor`, `borrarProveedor`, `enriquecerProveedor`, `generarMensaje`, el handler de `$("buscar").addEventListener(...)`, y el handler de `$("publicar").addEventListener(...)`. (Son 7 call sites; la firma es idéntica, solo cambia el nombre de la función.)
+En `web/app.js`, reemplazar cada `fetch("/api/...")` o ``fetch(`/api/...`)`` por `apiFetch(...)` en estas funciones: `cargarDirectorio`, `patchProveedor`, `borrarProveedor`, `enriquecerProveedor`, `generarMensaje`, el handler de `$("buscar").addEventListener(...)`, y el handler de `$("publicar").addEventListener(...)`. (Son 7 call sites; la firma es idéntica, solo cambia el nombre de la función.)
 
 En los `catch` de esas funciones, ignorar el error sentinela para no pisar el mensaje del overlay:
 
@@ -813,7 +850,7 @@ $("loginForm").addEventListener("submit", async (e) => {
 En el handler de `$("publicar")`, reemplazar el texto de éxito por:
 
 ```js
-    $("status").textContent = `${data.publicados} proveedores publicados — ya visibles en la landing.`;
+$("status").textContent = `${data.publicados} proveedores publicados — ya visibles en la landing.`;
 ```
 
 - [ ] **Step 7: Verificación local rápida + commit**
@@ -821,6 +858,7 @@ En el handler de `$("publicar")`, reemplazar el texto de éxito por:
 ```bash
 rtk pnpm run build && rtk pnpm run serve
 ```
+
 Abrir `http://localhost:8787` — la app carga normal (el entry local no exige clave, así que el overlay NO aparece). Cortar el server (Ctrl-C).
 
 ```bash
@@ -833,6 +871,7 @@ rtk git commit -m "feat: pantalla de clave de acceso y manejo de 401 en el front
 ## Task 6: Loader de entorno para Vercel
 
 **Files:**
+
 - Create: `src/config/vercelEnv.ts`
 - Test: `src/config/vercelEnv.test.ts`
 
@@ -901,9 +940,12 @@ export interface VercelEnv {
 }
 
 const required = (name: string) =>
-  z.string({ message: `Falta la variable de entorno ${name}` }).trim().min(1, {
-    message: `${name} no puede estar vacía`,
-  });
+  z
+    .string({ message: `Falta la variable de entorno ${name}` })
+    .trim()
+    .min(1, {
+      message: `${name} no puede estar vacía`,
+    });
 
 const schema = z.object({
   ANTHROPIC_API_KEY: required("ANTHROPIC_API_KEY"),
@@ -949,6 +991,7 @@ rtk git commit -m "feat: loader de entorno para el deploy en Vercel"
 ## Task 7: Entry de Vercel + configuración + dependencias
 
 **Files:**
+
 - Modify: `package.json` (dependencias)
 - Create: `api/index.ts`
 - Create: `vercel.json`
@@ -997,7 +1040,10 @@ const redis = new Redis({ url: env.upstashUrl, token: env.upstashToken });
 // Upstash devuelve objetos ya deserializados; forzamos string para reusar el
 // parseo zod del store (que espera texto JSON).
 const redisLike = {
-  get: (key: string) => redis.get<string>(key).then((v) => (v == null ? null : typeof v === "string" ? v : JSON.stringify(v))),
+  get: (key: string) =>
+    redis
+      .get<string>(key)
+      .then((v) => (v == null ? null : typeof v === "string" ? v : JSON.stringify(v))),
   set: (key: string, value: string) => redis.set(key, value),
 };
 const store = createRedisStore(redisLike);
@@ -1069,6 +1115,7 @@ rtk git commit -m "feat: entry de Vercel (Redis + clave + búsqueda acotada) y c
 ## Task 8: La landing lee el directorio público desde Vercel
 
 **Files:**
+
 - Modify: `landing/index.html`
 
 - [ ] **Step 1: Apuntar el fetch a la API pública de Vercel**
@@ -1076,20 +1123,20 @@ rtk git commit -m "feat: entry de Vercel (Redis + clave + búsqueda acotada) y c
 En `landing/index.html`, en el `<script>` del directorio público (~línea 591), reemplazar:
 
 ```js
-        fetch("./proveedores.json")
+fetch("./proveedores.json");
 ```
 
 por (usando una constante configurable al tope del bloque IIFE, ~línea 570, junto a los otros `var`):
 
 ```js
-        // URL de la app en Vercel; se completa tras el deploy (Task 10).
-        var API_PUBLICO = "https://REEMPLAZAR-CON-DOMINIO-VERCEL/api/publico";
+// URL de la app en Vercel; se completa tras el deploy (Task 10).
+var API_PUBLICO = "https://REEMPLAZAR-CON-DOMINIO-VERCEL/api/publico";
 ```
 
 y el fetch:
 
 ```js
-        fetch(API_PUBLICO)
+fetch(API_PUBLICO);
 ```
 
 El resto del bloque (parseo, render de filas, `catch` que oculta la sección) queda igual: la forma de `PublicSupplier` es la misma que la del `proveedores.json`.
@@ -1106,6 +1153,7 @@ rtk git commit -m "feat: la landing lee el directorio público desde la API de V
 ## Task 9: Script de siembra del directorio en Redis
 
 **Files:**
+
 - Create: `scripts/seed-redis.ts`
 
 Nota: script operativo de una sola corrida; sin test unitario. Siembra el `directorio.json` local en Redis.
@@ -1135,11 +1183,15 @@ async function main(): Promise<void> {
   const redis = new Redis({ url, token });
   await redis.set("directorio", JSON.stringify(suppliers));
 
-  process.stdout.write(`Sembrados ${suppliers.length} proveedores en Redis (clave "directorio").\n`);
+  process.stdout.write(
+    `Sembrados ${suppliers.length} proveedores en Redis (clave "directorio").\n`,
+  );
 }
 
 main().catch((error) => {
-  process.stderr.write(`Error sembrando Redis: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(
+    `Error sembrando Redis: ${error instanceof Error ? error.message : String(error)}\n`,
+  );
   process.exitCode = 1;
 });
 ```

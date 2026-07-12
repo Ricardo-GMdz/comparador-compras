@@ -94,7 +94,7 @@ Implementa el mismo contrato que el store de archivo (mismas firmas que
 
 - `maxWebSearchUses` (hoy 5) — cuántas rondas de `web_search` permite el agente.
 - `thinking` (hoy `adaptive`) — pasa a un presupuesto acotado (`type: "enabled",
-  budget_tokens: N`) o se desactiva, para no gastar minutos "pensando".
+budget_tokens: N`) o se desactiva, para no gastar minutos "pensando".
 - `maxEmptyRetries` (hoy 1) — en modo acotado baja a 0 (un reintento duplica el
   tiempo).
 - `maxTokens` (hoy 16000) — tope de salida más chico.
