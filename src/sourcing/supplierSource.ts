@@ -69,7 +69,7 @@ function buildSystemPrompt(): string {
     "o si vende sobre pedido; si no lo publica, omití el campo (no lo inventes).",
     "Si el proveedor no publica precio de mayoreo, NO lo descartes: reportá el precio",
     "unitario disponible (o sin precio) — la falta de mayoreo no penaliza.",
-    'Si el proveedor publica un precio de lista/catálogo (aunque no sea de mayoreo),',
+    "Si el proveedor publica un precio de lista/catálogo (aunque no sea de mayoreo),",
     'reportalo en "catalogPrice" con su "currency". Si publica su dirección/ciudad,',
     'ponela en "address". No inventes ninguno de los dos: omitilos si no están.',
     'Marcá "trusted": true solo para empresas reconocidas/verificables (con datos de contacto reales).',
