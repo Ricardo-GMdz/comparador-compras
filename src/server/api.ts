@@ -235,7 +235,11 @@ export function buildApi(deps: ApiDeps): Hono {
     const parsed = patchSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) {
       return c.json(
-        { ok: false, error: "Body inválido: se espera 'status' (enum) y/o 'notes' (texto)." },
+        {
+          ok: false,
+          error:
+            "Body inválido: se espera 'status' (enum), 'notes' (texto) y/o 'favorite' (booleano).",
+        },
         400,
       );
     }
