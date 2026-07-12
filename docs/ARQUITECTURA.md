@@ -59,6 +59,21 @@ del v1). Un modal de **cotización** genera un mensaje copiable (template local
 `web_fetch` sobre su sitio, solo campos faltantes) y el directorio se exporta a
 **CSV**. Los proveedores persistidos sin `status` migran a `"pendiente"` al leer.
 
+### v2.2 — análisis, detalle y favoritos
+
+El sourcing extrae dos datos más cuando el proveedor los publica: **precio de
+catálogo** (`catalogPrice`, precio de lista/unitario, distinto del `wholesalePrice`
+de mayoreo — resuelve el caso de instrumentos que no publican mayoreo) y
+**dirección** (`address`, ciudad/domicilio). Clickear el **nombre** de un proveedor
+abre un **modal de detalle** con todo (precios mayoreo/catálogo, MOQ, stock,
+dirección, contacto, notas, y "Envío: se consulta en la cotización" — el envío no
+se auto-completa). Cada proveedor puede marcarse como **favorito** (`favorite`,
+gestión manual como `status`/`notes`: el sourcing no lo pisa y **nunca** se publica
+en la landing). La barra suma **orden** (precio efectivo = mayoreo ?? catálogo /
+favoritos / nombre / reciente) y filtro **"solo favoritos"** (client-side). El CSV
+suma `catalogPrice`, `address`, `favorite`; el directorio público suma
+`catalogPrice`/`address` (no `favorite`).
+
 ### Flujo end-to-end
 
 ```
