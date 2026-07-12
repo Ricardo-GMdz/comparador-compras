@@ -2,7 +2,7 @@
 
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { rename, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import Anthropic from "@anthropic-ai/sdk";
 import { loadDotenvIfPresent } from "../config/loadDotenv.js";
 import { loadEnv } from "../config/env.js";
@@ -28,12 +28,23 @@ async function savePublicDirectory(suppliers: readonly PublicSupplier[]): Promis
   await rename(tmp, PUBLIC_DIRECTORY_PATH);
 }
 
+// Lee el directorio público desde disco; si no existe todavía, devuelve [].
+async function loadPublicDirectory(): Promise<readonly PublicSupplier[]> {
+  try {
+    const raw = await readFile(PUBLIC_DIRECTORY_PATH, "utf8");
+    return JSON.parse(raw) as readonly PublicSupplier[];
+  } catch {
+    return [];
+  }
+}
+
 const client = new Anthropic({ apiKey: env.anthropicApiKey });
 const app = buildApi({
   source: createSupplierSource({ client, localidad: env.sourcingLocalidad }),
   loadDirectory,
   saveDirectory,
   savePublicDirectory,
+  loadPublicDirectory,
   now: () => new Date().toISOString(),
   directoryPath: DIRECTORY_PATH,
 });
