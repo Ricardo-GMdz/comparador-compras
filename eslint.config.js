@@ -7,7 +7,7 @@ import prettier from "eslint-config-prettier";
 export default tseslint.config(
   {
     // Carpetas que ESLint nunca debe analizar.
-    ignores: ["dist/**", "node_modules/**", "coverage/**"],
+    ignores: ["dist/**", "public/**", "node_modules/**", "coverage/**"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

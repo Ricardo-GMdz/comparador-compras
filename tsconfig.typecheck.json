@@ -1,0 +1,10 @@
+{
+  // Typecheck que cubre también el entry de Vercel (api/). No emite, así que
+  // relajar rootDir a la raíz no afecta la estructura de dist del build/bin.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src", "api"]
+}

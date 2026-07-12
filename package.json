@@ -18,7 +18,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "build:vercel": "tsc && rm -rf public && cp -r web public",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -30,6 +31,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
     "@hono/node-server": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "commander": "^14.0.1",
     "hono": "^4.12.27",
     "zod": "^4.1.13"
