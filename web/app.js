@@ -10,6 +10,25 @@ let mejorOpcion = null;
 let proveedorCotizacion = null;
 let cotizacionSeq = 0;
 
+// Wrapper de fetch a la API: ante 401 muestra la pantalla de clave y corta el flujo.
+async function apiFetch(url, opts) {
+  const res = await fetch(url, opts);
+  if (res.status === 401) {
+    mostrarLogin();
+    throw new Error("no-autorizado");
+  }
+  return res;
+}
+
+function mostrarLogin() {
+  $("login").classList.remove("hidden");
+  $("loginKey").focus();
+}
+
+function ocultarLogin() {
+  $("login").classList.add("hidden");
+}
+
 // Los datos del proveedor vienen del modelo/web_search (fuente externa no
 // confiable): se escapan antes de inyectarlos en innerHTML para evitar XSS.
 function esc(value) {
@@ -160,7 +179,7 @@ function render() {
 async function cargarDirectorio() {
   const region = $("region").value.trim() || "global";
   try {
-    const res = await fetch(`/api/directorio?region=${encodeURIComponent(region)}`);
+    const res = await apiFetch(`/api/directorio?region=${encodeURIComponent(region)}`);
     const data = await res.json();
     if (!data.ok) {
       $("status").textContent = data.error ?? "No se pudo cargar el directorio.";
@@ -168,7 +187,8 @@ async function cargarDirectorio() {
     }
     directorio = data.suppliers;
     render();
-  } catch {
+  } catch (e) {
+    if (e && e.message === "no-autorizado") return;
     $("status").textContent = "No se pudo cargar el directorio.";
   }
 }
@@ -177,7 +197,7 @@ async function cargarDirectorio() {
 
 async function patchProveedor(key, patch) {
   try {
-    const res = await fetch(`/api/proveedor/${encodeURIComponent(key)}`, {
+    const res = await apiFetch(`/api/proveedor/${encodeURIComponent(key)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(patch),
@@ -189,14 +209,15 @@ async function patchProveedor(key, patch) {
     }
     $("status").textContent = "Guardado.";
     await cargarDirectorio();
-  } catch {
+  } catch (e) {
+    if (e && e.message === "no-autorizado") return;
     $("status").textContent = "No se pudo actualizar el proveedor.";
   }
 }
 
 async function borrarProveedor(key) {
   try {
-    const res = await fetch(`/api/proveedor/${encodeURIComponent(key)}`, { method: "DELETE" });
+    const res = await apiFetch(`/api/proveedor/${encodeURIComponent(key)}`, { method: "DELETE" });
     const data = await res.json();
     if (!data.ok) {
       $("status").textContent = data.error ?? "No se pudo borrar el proveedor.";
@@ -205,7 +226,8 @@ async function borrarProveedor(key) {
     if (mejorOpcion && keyOf(mejorOpcion) === key) mejorOpcion = null;
     $("status").textContent = "Proveedor eliminado.";
     await cargarDirectorio();
-  } catch {
+  } catch (e) {
+    if (e && e.message === "no-autorizado") return;
     $("status").textContent = "No se pudo borrar el proveedor.";
   }
 }
@@ -214,7 +236,7 @@ async function enriquecerProveedor(key, boton) {
   boton.disabled = true;
   boton.textContent = "Buscando…";
   try {
-    const res = await fetch(`/api/proveedor/${encodeURIComponent(key)}/enriquecer`, {
+    const res = await apiFetch(`/api/proveedor/${encodeURIComponent(key)}/enriquecer`, {
       method: "POST",
     });
     const data = await res.json();
@@ -224,7 +246,8 @@ async function enriquecerProveedor(key, boton) {
     }
     $("status").textContent = "Contacto actualizado.";
     await cargarDirectorio();
-  } catch {
+  } catch (e) {
+    if (e && e.message === "no-autorizado") return;
     $("status").textContent = "No se pudo completar el contacto.";
   } finally {
     // Si la tabla no se re-renderizó (error), se rehabilita el botón original.
@@ -278,7 +301,7 @@ async function generarMensaje() {
   const seq = ++cotizacionSeq;
   const key = keyOf(proveedorCotizacion);
   try {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/proveedor/${encodeURIComponent(key)}/cotizacion?quantity=${encodeURIComponent(quantity)}&spec=${encodeURIComponent(spec)}`,
     );
     const data = await res.json();
@@ -290,7 +313,8 @@ async function generarMensaje() {
     }
     $("mMensaje").value = data.message;
     actualizarWhatsapp(data.message);
-  } catch {
+  } catch (e) {
+    if (e && e.message === "no-autorizado") return;
     if (seq !== cotizacionSeq) return;
     $("mMensaje").value = "No se pudo generar el mensaje.";
     actualizarWhatsapp("");
@@ -321,7 +345,7 @@ $("buscar").addEventListener("submit", async (e) => {
   if (!query) return;
   $("status").textContent = "Buscando proveedores…";
   try {
-    const res = await fetch("/api/buscar", {
+    const res = await apiFetch("/api/buscar", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ query, region }),
@@ -335,7 +359,8 @@ $("buscar").addEventListener("submit", async (e) => {
     mejorOpcion = data.mejorOpcion;
     render();
     $("status").textContent = `${data.nuevos} nuevos · ${data.total} en total`;
-  } catch {
+  } catch (e) {
+    if (e && e.message === "no-autorizado") return;
     $("status").textContent = "No se pudo completar la búsqueda.";
   }
 });
@@ -343,21 +368,42 @@ $("buscar").addEventListener("submit", async (e) => {
 $("filtro").addEventListener("input", render);
 $("filtroEstado").addEventListener("change", render);
 
+$("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const key = $("loginKey").value;
+  $("loginError").textContent = "";
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    if (!res.ok) {
+      $("loginError").textContent = "Clave incorrecta.";
+      return;
+    }
+    ocultarLogin();
+    $("loginKey").value = "";
+    await cargarDirectorio();
+  } catch {
+    $("loginError").textContent = "No se pudo verificar la clave.";
+  }
+});
+
 // Publicar la selección (contactados/cotizó) al directorio público de la landing.
 $("publicar").addEventListener("click", async () => {
   const boton = $("publicar");
   boton.disabled = true;
   try {
-    const res = await fetch("/api/publicar", { method: "POST" });
+    const res = await apiFetch("/api/publicar", { method: "POST" });
     const data = await res.json();
     if (!data.ok) {
       $("status").textContent = data.error ?? "No se pudo publicar.";
       return;
     }
-    $("status").textContent =
-      `${data.publicados} proveedores publicados en landing/proveedores.json — ` +
-      "commiteá y pusheá para verlos en la landing.";
-  } catch {
+    $("status").textContent = `${data.publicados} proveedores publicados — ya visibles en la landing.`;
+  } catch (e) {
+    if (e && e.message === "no-autorizado") return;
     $("status").textContent = "No se pudo publicar.";
   } finally {
     boton.disabled = false;

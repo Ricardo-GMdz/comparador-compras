@@ -8,6 +8,16 @@
   </head>
   <body>
     <main class="wrap">
+      <div id="login" class="login-overlay hidden">
+        <form id="loginForm" class="login-card">
+          <h2>Clave de acceso</h2>
+          <p class="login-hint">Esta app consume tokens; ingresá la clave compartida.</p>
+          <input id="loginKey" class="input" type="password" placeholder="Clave" autocomplete="current-password" />
+          <button class="btn" type="submit">Entrar</button>
+          <div id="loginError" class="login-error"></div>
+        </form>
+      </div>
+
       <header class="topbar">
         <div class="brand"><span class="logo">⌁</span> Proveedores</div>
         <div class="counters">
