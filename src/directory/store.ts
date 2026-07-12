@@ -163,7 +163,7 @@ const supplierSchema = z.object({
   firstSeen: z.string(),
   lastSeen: z.string(),
 });
-const directorySchema = z.array(supplierSchema);
+export const directorySchema = z.array(supplierSchema);
 
 /**
  * Carga el directorio desde `path`. Si el archivo no existe, devuelve `[]`.
