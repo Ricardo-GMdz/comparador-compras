@@ -9,10 +9,14 @@ import { loadDotenvIfPresent } from "../src/config/loadDotenv.js";
 
 async function main(): Promise<void> {
   loadDotenvIfPresent();
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Aceptamos ambos esquemas: UPSTASH_* (manual) y KV_* (integración de Vercel).
+  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
   if (!url || !token) {
-    throw new Error("Faltan UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN en el entorno.");
+    throw new Error(
+      "Faltan las credenciales de Redis en el entorno " +
+        "(UPSTASH_REDIS_REST_URL/TOKEN o KV_REST_API_URL/TOKEN).",
+    );
   }
 
   const raw = await readFile("directorio.json", "utf8");

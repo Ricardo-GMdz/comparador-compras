@@ -24,8 +24,13 @@ const required = (name: string) =>
 const schema = z.object({
   ANTHROPIC_API_KEY: required("ANTHROPIC_API_KEY"),
   ACCESS_KEY: required("ACCESS_KEY"),
-  UPSTASH_REDIS_REST_URL: required("UPSTASH_REDIS_REST_URL"),
-  UPSTASH_REDIS_REST_TOKEN: required("UPSTASH_REDIS_REST_TOKEN"),
+  // Redis: la integración de Upstash en Vercel inyecta las credenciales REST con
+  // nombres KV_* (KV_REST_API_URL/TOKEN); las viejas integraciones o el uso manual
+  // usan UPSTASH_*. Aceptamos ambos esquemas (UPSTASH_* tiene prioridad).
+  UPSTASH_REDIS_REST_URL: z.string().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+  KV_REST_API_URL: z.string().optional(),
+  KV_REST_API_TOKEN: z.string().optional(),
   SOURCING_LOCALIDAD: z.string().optional(),
 });
 
@@ -36,12 +41,27 @@ export function loadVercelEnv(source: NodeJS.ProcessEnv = process.env): VercelEn
     const details = result.error.issues.map((i) => i.message).join("; ");
     throw new Error(`Configuración de entorno inválida: ${details}`);
   }
-  const localidad = result.data.SOURCING_LOCALIDAD?.trim();
+  const { data } = result;
+  // UPSTASH_* tiene prioridad; si no, caemos a los KV_* de la integración de Vercel.
+  const upstashUrl = (data.UPSTASH_REDIS_REST_URL ?? data.KV_REST_API_URL)?.trim();
+  const upstashToken = (data.UPSTASH_REDIS_REST_TOKEN ?? data.KV_REST_API_TOKEN)?.trim();
+  if (
+    upstashUrl === undefined ||
+    upstashUrl.length === 0 ||
+    upstashToken === undefined ||
+    upstashToken.length === 0
+  ) {
+    throw new Error(
+      "Configuración de entorno inválida: falta la URL/token de Redis " +
+        "(UPSTASH_REDIS_REST_URL/TOKEN o KV_REST_API_URL/TOKEN).",
+    );
+  }
+  const localidad = data.SOURCING_LOCALIDAD?.trim();
   return {
-    anthropicApiKey: result.data.ANTHROPIC_API_KEY,
-    accessKey: result.data.ACCESS_KEY,
-    upstashUrl: result.data.UPSTASH_REDIS_REST_URL,
-    upstashToken: result.data.UPSTASH_REDIS_REST_TOKEN,
+    anthropicApiKey: data.ANTHROPIC_API_KEY,
+    accessKey: data.ACCESS_KEY,
+    upstashUrl,
+    upstashToken,
     ...(localidad !== undefined && localidad.length > 0 ? { sourcingLocalidad: localidad } : {}),
   };
 }
