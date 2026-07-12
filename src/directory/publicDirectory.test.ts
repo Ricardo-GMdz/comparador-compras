@@ -85,6 +85,27 @@ describe("buildPublicDirectory", () => {
     expect(result[0]).not.toHaveProperty("lastSeen");
   });
 
+  it("publica catalogPrice y address, pero NO favorite", () => {
+    const out = buildPublicDirectory([
+      {
+        name: "Master Supply",
+        material: "Extech 475040",
+        region: "mx",
+        trusted: true,
+        contact: {},
+        status: "contactado",
+        catalogPrice: 439.99,
+        address: "Monterrey, NL",
+        favorite: true,
+        firstSeen: NOW,
+        lastSeen: NOW,
+      },
+    ]);
+    expect(out[0]?.catalogPrice).toBe(439.99);
+    expect(out[0]?.address).toBe("Monterrey, NL");
+    expect(out[0]).not.toHaveProperty("favorite");
+  });
+
   it("no muta la entrada y devuelve [] sin publicables", () => {
     // Arrange
     const suppliers = [sup({ status: "pendiente" })];

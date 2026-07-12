@@ -95,6 +95,38 @@ describe("parseSuppliers", () => {
     });
   });
 
+  describe("v2.2: catalogPrice y address", () => {
+    it("parsea catalogPrice numérico positivo y address no vacío", () => {
+      const out = parseSuppliers(
+        {
+          suppliers: [
+            {
+              name: "Master Supply",
+              material: "Extech 475040",
+              catalogPrice: 439.99,
+              currency: "USD",
+              address: "Monterrey, NL",
+            },
+          ],
+        },
+        "mx",
+      );
+      expect(out[0]?.catalogPrice).toBe(439.99);
+      expect(out[0]?.address).toBe("Monterrey, NL");
+    });
+
+    it("descarta catalogPrice no positivo y address vacío (campos omitidos)", () => {
+      const out = parseSuppliers(
+        {
+          suppliers: [{ name: "X", material: "m", catalogPrice: 0, address: "   " }],
+        },
+        "mx",
+      );
+      expect(out[0]?.catalogPrice).toBeUndefined();
+      expect(out[0]?.address).toBeUndefined();
+    });
+  });
+
   describe("normalización de availability (stock)", () => {
     it.each([
       ["disponible", "disponible"],

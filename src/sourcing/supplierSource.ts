@@ -59,6 +59,8 @@ function buildSystemPrompt(): string {
     '  "wholesalePrice"?: number, "currency"?: string (ISO 4217), "moq"?: number,',
     '  "priceUnit"?: "pieza"|"kg"|"tonelada"|"m2",',
     '  "availability"?: "disponible"|"sobre pedido",',
+    '  "catalogPrice"?: number (precio de lista/catálogo publicado, distinto del mayoreo),',
+    '  "address"?: string (dirección o ciudad del proveedor si la publica),',
     '  "contact"?: { "email"?: string, "phone"?: string, "whatsapp"?: string, "formUrl"?: string },',
     '  "trusted"?: boolean, "notes"?: string } ] }.',
     'Cuando indiques "wholesalePrice", indicá también "priceUnit": la unidad a la que',
@@ -67,6 +69,9 @@ function buildSystemPrompt(): string {
     "o si vende sobre pedido; si no lo publica, omití el campo (no lo inventes).",
     "Si el proveedor no publica precio de mayoreo, NO lo descartes: reportá el precio",
     "unitario disponible (o sin precio) — la falta de mayoreo no penaliza.",
+    "Si el proveedor publica un precio de lista/catálogo (aunque no sea de mayoreo),",
+    'reportalo en "catalogPrice" con su "currency". Si publica su dirección/ciudad,',
+    'ponela en "address". No inventes ninguno de los dos: omitilos si no están.',
     'Marcá "trusted": true solo para empresas reconocidas/verificables (con datos de contacto reales).',
     'Priorizá precio y datos de contacto. Si no encontrás, devolvé { "suppliers": [] }.',
   ].join("\n");

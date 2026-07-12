@@ -20,6 +20,8 @@ export interface PublicSupplier {
   region: string;
   website?: string;
   wholesalePrice?: number;
+  catalogPrice?: number;
+  address?: string;
   currency?: string;
   priceUnit?: PriceUnit;
   availability?: Availability;
@@ -37,6 +39,8 @@ function toPublic(supplier: Supplier): PublicSupplier {
     region: supplier.region,
     ...(supplier.website !== undefined ? { website: supplier.website } : {}),
     ...(supplier.wholesalePrice !== undefined ? { wholesalePrice: supplier.wholesalePrice } : {}),
+    ...(supplier.catalogPrice !== undefined ? { catalogPrice: supplier.catalogPrice } : {}),
+    ...(supplier.address !== undefined ? { address: supplier.address } : {}),
     ...(supplier.currency !== undefined ? { currency: supplier.currency } : {}),
     ...(supplier.priceUnit !== undefined ? { priceUnit: supplier.priceUnit } : {}),
     ...(supplier.availability !== undefined ? { availability: supplier.availability } : {}),

@@ -74,6 +74,7 @@ export function mergeSuppliers(
         ...candidate,
         contact: { ...prev.contact, ...candidate.contact },
         status: prev.status,
+        ...(prev.favorite !== undefined ? { favorite: prev.favorite } : {}),
         ...(prev.notes !== undefined
           ? { notes: prev.notes }
           : candidate.notes !== undefined
@@ -94,6 +95,8 @@ export interface SupplierPatch {
   notes?: string;
   /** Contacto a mergear: solo completa campos faltantes (lo existente gana). */
   contact?: SupplierContact;
+  /** Marca de favorito (gestión manual del usuario). */
+  favorite?: boolean;
 }
 
 /**
@@ -118,6 +121,7 @@ export function updateSupplier(
     ...(patch.status !== undefined ? { status: patch.status } : {}),
     ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
     ...(patch.contact !== undefined ? { contact: { ...patch.contact, ...current.contact } } : {}),
+    ...(patch.favorite !== undefined ? { favorite: patch.favorite } : {}),
     lastSeen: now,
   };
   return [...suppliers.slice(0, index), updated, ...suppliers.slice(index + 1)];
@@ -158,6 +162,9 @@ const supplierSchema = z.object({
   contact: contactSchema,
   trusted: z.boolean(),
   notes: z.string().optional(),
+  catalogPrice: z.number().optional(),
+  address: z.string().optional(),
+  favorite: z.boolean().optional(),
   // Migración: los directorios pre-v2.1 no traen `status`; entran como "pendiente".
   status: z.enum(["pendiente", "contactado", "cotizó", "descartado"]).default("pendiente"),
   firstSeen: z.string(),

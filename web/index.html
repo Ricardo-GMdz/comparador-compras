@@ -46,6 +46,13 @@
           <option value="cotizó">Cotizó</option>
           <option value="descartado">Descartado</option>
         </select>
+        <select id="orden" class="input select-estado">
+          <option value="reciente">Orden: reciente</option>
+          <option value="precio">Orden: precio ↑</option>
+          <option value="favoritos">Orden: favoritos</option>
+          <option value="nombre">Orden: nombre</option>
+        </select>
+        <label class="fav-filtro"><input type="checkbox" id="soloFav" /> Solo favoritos</label>
         <a class="csv-link" href="/api/directorio.csv" download>⬇ Exportar CSV</a>
         <button
           id="publicar"
@@ -80,6 +87,16 @@
             >💬 Abrir en WhatsApp</a
           >
           <button id="mCerrar" class="btn btn-ghost" type="button">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="detalle" class="modal hidden">
+      <div class="modal-card modal-detalle">
+        <h3 id="dTitulo">Proveedor</h3>
+        <div id="dCuerpo" class="detalle-cuerpo"></div>
+        <div class="modal-actions">
+          <button id="dCerrar" class="btn btn-ghost" type="button">Cerrar</button>
         </div>
       </div>
     </div>

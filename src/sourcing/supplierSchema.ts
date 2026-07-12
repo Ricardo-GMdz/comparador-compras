@@ -83,6 +83,8 @@ const rawSupplierSchema = z.object({
   contact: rawContactSchema.optional(),
   trusted: z.boolean().optional(),
   notes: z.string().optional(),
+  catalogPrice: z.number().optional(),
+  address: z.string().optional(),
 });
 
 const rawResponseSchema = z.object({ suppliers: z.array(z.unknown()) });
@@ -115,6 +117,9 @@ function toCandidate(raw: RawSupplier, region: string): SupplierCandidate {
   const wholesalePrice = validPrice(raw.wholesalePrice);
   const priceUnit = normalizePriceUnit(raw.priceUnit);
   const availability = normalizeAvailability(raw.availability);
+  const catalogPrice = validPrice(raw.catalogPrice);
+  const address =
+    raw.address !== undefined && raw.address.trim().length > 0 ? raw.address.trim() : undefined;
   return {
     name: raw.name,
     material: raw.material,
@@ -128,6 +133,8 @@ function toCandidate(raw: RawSupplier, region: string): SupplierCandidate {
     ...(priceUnit !== undefined ? { priceUnit } : {}),
     ...(availability !== undefined ? { availability } : {}),
     ...(raw.notes !== undefined ? { notes: raw.notes } : {}),
+    ...(catalogPrice !== undefined ? { catalogPrice } : {}),
+    ...(address !== undefined ? { address } : {}),
   };
 }
 

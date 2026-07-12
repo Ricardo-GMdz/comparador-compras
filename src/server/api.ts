@@ -36,15 +36,18 @@ const buscarSchema = z.object({
   region: z.string().min(1).default("global"),
 });
 
-// Body del PATCH de gestión: status y/o notes, con al menos uno presente.
+// Body del PATCH de gestión: status, notes y/o favorite, con al menos uno presente.
 const patchSchema = z
   .object({
     status: z.enum(["pendiente", "contactado", "cotizó", "descartado"]).optional(),
     notes: z.string().optional(),
+    favorite: z.boolean().optional(),
   })
-  .refine((patch) => patch.status !== undefined || patch.notes !== undefined, {
-    message: "Se requiere al menos 'status' o 'notes'.",
-  });
+  .refine(
+    (patch) =>
+      patch.status !== undefined || patch.notes !== undefined || patch.favorite !== undefined,
+    { message: "Se requiere al menos 'status', 'notes' o 'favorite'." },
+  );
 
 // Query del pedido de cotización: cantidad y especificación, ambas requeridas.
 const cotizacionSchema = z.object({
@@ -59,15 +62,18 @@ const CSV_COLUMNS = [
   "material",
   "region",
   "wholesalePrice",
+  "catalogPrice",
   "priceUnit",
   "currency",
   "moq",
+  "address",
   "email",
   "phone",
   "whatsapp",
   "formUrl",
   "trusted",
   "status",
+  "favorite",
   "notes",
   "firstSeen",
   "lastSeen",
@@ -94,15 +100,18 @@ function toCsv(suppliers: readonly Supplier[]): string {
       s.material,
       s.region,
       s.wholesalePrice,
+      s.catalogPrice,
       s.priceUnit,
       s.currency,
       s.moq,
+      s.address,
       s.contact.email,
       s.contact.phone,
       s.contact.whatsapp,
       s.contact.formUrl,
       s.trusted,
       s.status,
+      s.favorite,
       s.notes,
       s.firstSeen,
       s.lastSeen,
@@ -226,7 +235,11 @@ export function buildApi(deps: ApiDeps): Hono {
     const parsed = patchSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) {
       return c.json(
-        { ok: false, error: "Body inválido: se espera 'status' (enum) y/o 'notes' (texto)." },
+        {
+          ok: false,
+          error:
+            "Body inválido: se espera 'status' (enum), 'notes' (texto) y/o 'favorite' (booleano).",
+        },
         400,
       );
     }
