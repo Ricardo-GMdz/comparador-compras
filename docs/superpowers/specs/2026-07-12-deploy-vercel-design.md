@@ -13,13 +13,20 @@ usable por Ricardo y 1–2 socios, protegida con una clave de acceso compartida
 
 Decisiones tomadas en el brainstorming:
 
-- Hosting: **Vercel** (plan gratis). El usuario aún no tiene cuenta; la crea él
-  mismo cuando llegue el deploy (nunca creamos cuentas por él) y después el
-  deploy sigue por CLI con token.
+- Hosting: **Vercel plan Hobby (gratis)**. El usuario aún no tiene cuenta; la
+  crea él mismo cuando llegue el deploy (nunca creamos cuentas por él) y después
+  el deploy sigue por CLI con token.
 - Acceso: **una clave compartida** (Ricardo + 1–2 socios de confianza).
 - Persistencia: **Upstash Redis** (marketplace de Vercel).
 - Base pública: la landing de GitHub Pages **lee de Vercel** (endpoint público);
   "Publicar" deja de escribir archivos/commitear.
+- **Búsqueda acotada:** el plan Hobby mata cualquier request (y su trabajo en
+  background) a los **60 s**, y una búsqueda es una sola llamada al agente que
+  hoy tarda 1–4 min y no se puede partir. Decisión explícita: en el deploy la
+  búsqueda corre en **modo acotado** (menos rondas de `web_search`, presupuesto
+  de "pensar" reducido, menos resultados) para caber en 60 s, **aceptando que
+  encuentra menos y con menos detalle** que el modo local sin límite. El modo
+  local (`pnpm run serve`) queda **sin recortes**.
 
 ## Arquitectura
 
@@ -80,13 +87,35 @@ Implementa el mismo contrato que el store de archivo (mismas firmas que
 - `landing/proveedores.json` y el flujo de commitear/pushear ese archivo quedan
   obsoletos (se documenta; el archivo se elimina si existe).
 
-### 4. Entry de Vercel — `api/index.ts` + `vercel.json`
+### 4. Búsqueda acotada — presupuesto inyectable en el sourcing
+
+`createSupplierSource` gana un parámetro opcional `searchBudget` en
+`SupplierSourceDeps` que sobreescribe las constantes que hoy son fijas:
+
+- `maxWebSearchUses` (hoy 5) — cuántas rondas de `web_search` permite el agente.
+- `thinking` (hoy `adaptive`) — pasa a un presupuesto acotado (`type: "enabled",
+  budget_tokens: N`) o se desactiva, para no gastar minutos "pensando".
+- `maxEmptyRetries` (hoy 1) — en modo acotado baja a 0 (un reintento duplica el
+  tiempo).
+- `maxTokens` (hoy 16000) — tope de salida más chico.
+
+Sin `searchBudget` el comportamiento es **idéntico al actual** (local sin
+recortes). El entry de Vercel pasa un `searchBudget` conservador (p. ej.
+`maxWebSearchUses: 2`, thinking acotado, `maxEmptyRetries: 0`) elegido para que
+el turno del agente cierre dentro de los 60 s. Los valores exactos se afinan en
+implementación midiendo una búsqueda real; se documentan como constantes.
+
+### 5. Entry de Vercel — `api/index.ts` + `vercel.json`
 
 - `api/index.ts`: carga env (zod — `ANTHROPIC_API_KEY`, `ACCESS_KEY`, Upstash,
   `SOURCING_LOCALIDAD` opcional), arma cliente Anthropic + Redis, y exporta el
-  handler de `hono/vercel` con `buildApi(...)` + middleware de clave.
+  handler de `hono/vercel` con `buildApi(...)` + middleware de clave y el
+  `searchBudget` acotado.
 - `vercel.json`: estáticos de `web/` en la raíz, rewrites de `/api/*` a la
-  función, `maxDuration: 300`.
+  función, `maxDuration: 60` (tope del plan Hobby).
+- La UI marca la búsqueda en curso y, si el request se corta por timeout,
+  muestra un error claro ("la búsqueda tardó demasiado, probá de nuevo") en vez
+  de colgarse.
 - Siembra inicial: script one-shot (`scripts/seed-redis.ts`) que sube el
   `directorio.json` local (29 proveedores) a Redis. Se corre una vez tras el
   primer deploy.
@@ -105,10 +134,14 @@ visitante → landing GitHub Pages
 
 ## Riesgos y límites conocidos
 
-- **Timeout:** las búsquedas reales tardaron 1–4 min; el máximo del plan gratis
-  es 300 s. Se configura al tope. Si una búsqueda se pasa, la UI muestra el
-  error y se reintenta. Si se vuelve un problema recurrente: evaluar plan Pro o
-  jobs en background (explícitamente fuera de alcance ahora).
+- **Timeout / calidad recortada (el trade-off central):** el plan Hobby corta
+  todo request a 60 s y no hay cómputo durable en background, así que la
+  búsqueda corre en modo acotado (componente 4). Esto **reduce cuántos
+  proveedores encuentra y con cuánto detalle** frente al modo local sin límite.
+  Aun acotada, una búsqueda podría pasarse de 60 s y cortarse (la UI avisa y se
+  reintenta). Es una decisión consciente de priorizar "gratis" sobre "máxima
+  cobertura". Salidas si molesta: correr en local para búsquedas a fondo, o
+  migrar a un server siempre-prendido (Railway/Fly) — fuera de alcance ahora.
 - **Concurrencia:** dos socios guardando a la vez pueden pisarse (last write
   wins sobre el JSON completo). Aceptado para 2–3 usuarios de confianza; si
   duele, se migra a operaciones por proveedor.
@@ -122,6 +155,9 @@ visitante → landing GitHub Pages
   `/api/publico` y `/api/login` pasan sin cookie.
 - **redisStore** (cliente mockeado): round-trip load/save; clave inexistente →
   `[]`; JSON corrupto → error explícito; directorio público round-trip.
+- **Búsqueda acotada** (cliente Anthropic mockeado): con `searchBudget` se
+  pasan `max_uses`/`thinking`/reintentos acotados al request; **sin**
+  `searchBudget` el request queda idéntico al actual (no rompe el modo local).
 - **`GET /api/publico`:** responde sin clave, con header CORS, solo campos
   públicos (sin notas).
 - El smoke E2E existente sigue cubriendo el server local sin cambios.
