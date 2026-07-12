@@ -147,11 +147,17 @@ export function buildApi(deps: ApiDeps): Hono {
       const existing = await deps.loadDirectory(deps.directoryPath);
       const { suppliers, added } = mergeSuppliers(existing, candidates, deps.now());
       await deps.saveDirectory(deps.directoryPath, suppliers);
+      // La mejor opción se elige SOLO entre lo hallado en ESTA búsqueda (sus
+      // versiones ya mergeadas): el directorio acumula rubros distintos y no
+      // tiene sentido comparar precios entre rubros. Descartados fuera.
+      const foundKeys = new Set(candidates.map(supplierKey));
+      const foundSuppliers = activeSuppliers(suppliers).filter((s) =>
+        foundKeys.has(supplierKey(s)),
+      );
       return c.json({
         ok: true,
         suppliers: rankSuppliers(suppliers, region),
-        // Los descartados siguen listados, pero nunca compiten por mejor opción.
-        mejorOpcion: selectBestSupplier(activeSuppliers(suppliers), region) ?? null,
+        mejorOpcion: selectBestSupplier(foundSuppliers, region) ?? null,
         nuevos: added,
         total: suppliers.length,
       });

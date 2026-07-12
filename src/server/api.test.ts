@@ -356,6 +356,33 @@ describe("API", () => {
     expect(body.mejorOpcion?.name).toBe("Aceros");
   });
 
+  it("POST /api/buscar calcula mejorOpcion SOLO entre lo hallado en esta búsqueda (no cruza rubros)", async () => {
+    // Arrange: en el directorio ya vive un proveedor de OTRO rubro, confiable y
+    // más barato. La búsqueda actual encuentra a "Aceros" (fake source). La
+    // mejor opción debe ser de esta búsqueda, no el barato de otro rubro.
+    const { deps } = fakeDeps([
+      makeSupplier({
+        name: "Láminas Baratas (otro rubro)",
+        website: "https://laminas.mx",
+        wholesalePrice: 5,
+        trusted: true,
+      }),
+    ]);
+    const app = buildApi(deps);
+
+    // Act
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "dinamómetro", region: "mx" }),
+    });
+
+    // Assert: el directorio completo se lista, pero el best es del rubro buscado.
+    const body = (await res.json()) as ApiBody;
+    expect(body.suppliers?.map((s) => s.name)).toContain("Láminas Baratas (otro rubro)");
+    expect(body.mejorOpcion?.name).toBe("Aceros");
+  });
+
   it("POST /api/publicar escribe el directorio público (solo contactados/cotizó, sin notas)", async () => {
     // Arrange: uno publicable con notas privadas y uno pendiente.
     const { deps, published } = fakeDeps([
