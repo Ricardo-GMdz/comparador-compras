@@ -266,6 +266,37 @@ describe("updateSupplier", () => {
   });
 });
 
+describe("v2.2: updateSupplier favorite", () => {
+  const NOW = "2026-07-01T00:00:00.000Z";
+  const LATER = "2026-07-05T00:00:00.000Z";
+  const base: Supplier[] = [
+    {
+      name: "X",
+      website: "https://x.mx",
+      material: "m",
+      region: "mx",
+      trusted: true,
+      contact: {},
+      status: "pendiente" as const,
+      firstSeen: NOW,
+      lastSeen: NOW,
+    },
+  ];
+
+  it("marca favorite true y refresca lastSeen (inmutable)", () => {
+    const updated = updateSupplier(base, "d:x.mx", { favorite: true }, LATER);
+    expect(updated?.[0]?.favorite).toBe(true);
+    expect(updated?.[0]?.lastSeen).toBe(LATER);
+    expect(base[0]?.favorite).toBeUndefined();
+  });
+
+  it("desmarca favorite (false) explícitamente", () => {
+    const marked = updateSupplier(base, "d:x.mx", { favorite: true }, LATER);
+    const unmarked = updateSupplier(marked ?? [], "d:x.mx", { favorite: false }, LATER);
+    expect(unmarked?.[0]?.favorite).toBe(false);
+  });
+});
+
 describe("removeSupplier", () => {
   it("saca el proveedor correcto y deja los demás", () => {
     const a: Supplier = {

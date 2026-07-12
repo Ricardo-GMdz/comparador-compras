@@ -95,6 +95,8 @@ export interface SupplierPatch {
   notes?: string;
   /** Contacto a mergear: solo completa campos faltantes (lo existente gana). */
   contact?: SupplierContact;
+  /** Marca de favorito (gestión manual del usuario). */
+  favorite?: boolean;
 }
 
 /**
@@ -119,6 +121,7 @@ export function updateSupplier(
     ...(patch.status !== undefined ? { status: patch.status } : {}),
     ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
     ...(patch.contact !== undefined ? { contact: { ...patch.contact, ...current.contact } } : {}),
+    ...(patch.favorite !== undefined ? { favorite: patch.favorite } : {}),
     lastSeen: now,
   };
   return [...suppliers.slice(0, index), updated, ...suppliers.slice(index + 1)];
