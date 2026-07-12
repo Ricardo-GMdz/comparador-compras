@@ -64,11 +64,21 @@ export function mergeSuppliers(
       byKey.set(key, { ...candidate, status: "pendiente", firstSeen: now, lastSeen: now });
       added += 1;
     } else {
-      // El sourcing refresca datos pero NO pisa la gestión manual (status/notes).
+      // Re-avistamiento: lo nuevo actualiza, pero lo que el candidato NO trae
+      // se conserva (un re-avistamiento sin precio no borra el precio que ya
+      // teníamos). El candidato se construye solo con campos presentes, así
+      // que el spread sobre `prev` pisa únicamente lo que sí vino. El contacto
+      // mergea por campo, y la gestión manual (status/notas del usuario) gana.
       byKey.set(key, {
+        ...prev,
         ...candidate,
+        contact: { ...prev.contact, ...candidate.contact },
         status: prev.status,
-        notes: prev.notes,
+        ...(prev.notes !== undefined
+          ? { notes: prev.notes }
+          : candidate.notes !== undefined
+            ? { notes: candidate.notes }
+            : {}),
         firstSeen: prev.firstSeen,
         lastSeen: now,
       });

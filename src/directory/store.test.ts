@@ -55,6 +55,86 @@ describe("mergeSuppliers", () => {
     expect(result.suppliers[0]?.lastSeen).toBe(NOW);
   });
 
+  it("conserva los datos existentes cuando el re-avistamiento viene sin ellos", () => {
+    // El proveedor ya tenía precio/moneda/unidad/moq/contacto; el candidato
+    // nuevo (otra búsqueda) llega pelado: NO debe borrar lo que sabemos.
+    const existing: Supplier = {
+      ...candidate({
+        website: "https://a.com",
+        wholesalePrice: 439.99,
+        currency: "USD",
+        priceUnit: "pieza",
+        moq: 1,
+        contact: { email: "ventas@a.com" },
+      }),
+      status: "pendiente",
+      firstSeen: "2026-07-01T00:00:00.000Z",
+      lastSeen: "2026-07-01T00:00:00.000Z",
+    };
+    const resight = candidate({ website: "https://a.com" }); // sin precio ni contacto
+
+    const result = mergeSuppliers([existing], [resight], NOW);
+
+    const merged = result.suppliers[0];
+    expect(merged?.wholesalePrice).toBe(439.99);
+    expect(merged?.currency).toBe("USD");
+    expect(merged?.priceUnit).toBe("pieza");
+    expect(merged?.moq).toBe(1);
+    expect(merged?.contact.email).toBe("ventas@a.com");
+    expect(merged?.lastSeen).toBe(NOW);
+  });
+
+  it("los datos nuevos del candidato SÍ actualizan (y el contacto mergea por campo)", () => {
+    const existing: Supplier = {
+      ...candidate({
+        website: "https://a.com",
+        wholesalePrice: 500,
+        contact: { email: "ventas@a.com" },
+      }),
+      status: "pendiente",
+      firstSeen: "2026-07-01T00:00:00.000Z",
+      lastSeen: "2026-07-01T00:00:00.000Z",
+    };
+    const resight = candidate({
+      website: "https://a.com",
+      wholesalePrice: 450,
+      contact: { phone: "+52 81 1234 5678" },
+    });
+
+    const result = mergeSuppliers([existing], [resight], NOW);
+
+    const merged = result.suppliers[0];
+    expect(merged?.wholesalePrice).toBe(450);
+    expect(merged?.contact.email).toBe("ventas@a.com");
+    expect(merged?.contact.phone).toBe("+52 81 1234 5678");
+  });
+
+  it("toma las notas del candidato solo si el usuario no escribió las suyas", () => {
+    const conNotas: Supplier = {
+      ...candidate({ website: "https://a.com" }),
+      status: "pendiente",
+      notes: "nota manual del usuario",
+      firstSeen: NOW,
+      lastSeen: NOW,
+    };
+    const sinNotas: Supplier = {
+      ...candidate({ website: "https://b.com" }),
+      status: "pendiente",
+      firstSeen: NOW,
+      lastSeen: NOW,
+    };
+    const resights = [
+      candidate({ website: "https://a.com", notes: "nota del modelo" }),
+      candidate({ website: "https://b.com", notes: "ciudad: Monterrey" }),
+    ];
+
+    const result = mergeSuppliers([conNotas, sinNotas], resights, NOW);
+
+    const byWebsite = new Map(result.suppliers.map((s) => [s.website, s]));
+    expect(byWebsite.get("https://a.com")?.notes).toBe("nota manual del usuario");
+    expect(byWebsite.get("https://b.com")?.notes).toBe("ciudad: Monterrey");
+  });
+
   it("actualiza un proveedor existente conservando firstSeen y refrescando lastSeen", () => {
     const existing: Supplier = {
       ...candidate({ website: "https://a.com", wholesalePrice: 200 }),
