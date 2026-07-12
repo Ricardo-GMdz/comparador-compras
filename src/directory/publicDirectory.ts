@@ -2,7 +2,13 @@
 // Solo entran los trabajados (contactado/cotizó) y solo con campos públicos —
 // las notas y los timestamps del directorio privado NUNCA se publican.
 
-import type { PriceUnit, Supplier, SupplierContact, SupplierStatus } from "../domain/supplier.js";
+import type {
+  Availability,
+  PriceUnit,
+  Supplier,
+  SupplierContact,
+  SupplierStatus,
+} from "../domain/supplier.js";
 
 /** Estados que habilitan la publicación de un proveedor. */
 const PUBLISHABLE_STATUSES: readonly SupplierStatus[] = ["contactado", "cotizó"];
@@ -16,6 +22,7 @@ export interface PublicSupplier {
   wholesalePrice?: number;
   currency?: string;
   priceUnit?: PriceUnit;
+  availability?: Availability;
   moq?: number;
   contact: SupplierContact;
   trusted: boolean;
@@ -32,6 +39,7 @@ function toPublic(supplier: Supplier): PublicSupplier {
     ...(supplier.wholesalePrice !== undefined ? { wholesalePrice: supplier.wholesalePrice } : {}),
     ...(supplier.currency !== undefined ? { currency: supplier.currency } : {}),
     ...(supplier.priceUnit !== undefined ? { priceUnit: supplier.priceUnit } : {}),
+    ...(supplier.availability !== undefined ? { availability: supplier.availability } : {}),
     ...(supplier.moq !== undefined ? { moq: supplier.moq } : {}),
     contact: { ...supplier.contact },
     trusted: supplier.trusted,

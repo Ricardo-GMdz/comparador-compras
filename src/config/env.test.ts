@@ -15,6 +15,7 @@ describe("loadEnv", () => {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.MERCADO_LIBRE_CLIENT_ID;
     delete process.env.MERCADO_LIBRE_CLIENT_SECRET;
+    delete process.env.SOURCING_LOCALIDAD;
   });
 
   afterEach(() => {
@@ -81,6 +82,30 @@ describe("loadEnv", () => {
 
     // Assert
     expect(env.mercadoLibre).toBeUndefined();
+  });
+
+  test("expone la localidad prioritaria del sourcing cuando está configurada", () => {
+    // Arrange
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    process.env.SOURCING_LOCALIDAD = "San Nicolás de los Garza, NL";
+
+    // Act
+    const env = loadEnv();
+
+    // Assert
+    expect(env.sourcingLocalidad).toBe("San Nicolás de los Garza, NL");
+  });
+
+  test("omite la localidad cuando no está configurada o está vacía", () => {
+    // Arrange
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    process.env.SOURCING_LOCALIDAD = "   ";
+
+    // Act
+    const env = loadEnv();
+
+    // Assert
+    expect(env.sourcingLocalidad).toBeUndefined();
   });
 
   test("omite MercadoLibre cuando no hay ninguna credencial", () => {

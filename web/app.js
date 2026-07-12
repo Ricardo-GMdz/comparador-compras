@@ -73,6 +73,13 @@ function price(s) {
   return `$${esc(s.wholesalePrice)}${currency}${unit}`;
 }
 
+// Chip de disponibilidad (stock); vacío cuando es desconocida.
+function stockChip(s) {
+  if (s.availability === "disponible") return '<span class="chip chip-green">stock</span>';
+  if (s.availability === "sobre_pedido") return '<span class="chip chip-amber">sobre pedido</span>';
+  return "";
+}
+
 function renderBest(best) {
   const el = $("best");
   if (!best) {
@@ -110,7 +117,7 @@ function renderTable(suppliers) {
     <tr class="${s.status === "descartado" ? "row-descartado" : ""}">
       <td><strong>${esc(s.name)}</strong></td>
       <td><span class="tag">${esc(s.material)}</span></td>
-      <td>${price(s)}</td>
+      <td>${price(s)} ${stockChip(s)}</td>
       <td>${s.moq !== undefined ? esc(s.moq) : "—"}</td>
       <td>${esc(s.region)}</td>
       <td class="contacts">${contactFor(s)}</td>

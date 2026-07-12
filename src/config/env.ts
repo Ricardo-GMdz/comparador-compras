@@ -14,12 +14,15 @@ export interface Env {
   anthropicApiKey: string;
   /** Credenciales de MercadoLibre; presentes solo si ambas están configuradas. */
   mercadoLibre?: MercadoLibreCredentials;
+  /** Localidad prioritaria para el sourcing (criterio del usuario; opcional). */
+  sourcingLocalidad?: string;
 }
 
 // Nombres de variables de entorno como constantes (evita strings mágicos).
 const ANTHROPIC_API_KEY_VAR = "ANTHROPIC_API_KEY";
 const MERCADO_LIBRE_CLIENT_ID_VAR = "MERCADO_LIBRE_CLIENT_ID";
 const MERCADO_LIBRE_CLIENT_SECRET_VAR = "MERCADO_LIBRE_CLIENT_SECRET";
+const SOURCING_LOCALIDAD_VAR = "SOURCING_LOCALIDAD";
 
 // Esquema de validación del entorno. La API key de Anthropic es obligatoria;
 // las credenciales de MercadoLibre son opcionales (la fuente es opt-in).
@@ -30,6 +33,7 @@ const envSchema = z.object({
     .min(1, { message: `${ANTHROPIC_API_KEY_VAR} no puede estar vacía` }),
   [MERCADO_LIBRE_CLIENT_ID_VAR]: z.string().optional(),
   [MERCADO_LIBRE_CLIENT_SECRET_VAR]: z.string().optional(),
+  [SOURCING_LOCALIDAD_VAR]: z.string().optional(),
 });
 
 /**
@@ -57,9 +61,14 @@ export function loadEnv(): Env {
       ? { clientId, clientSecret }
       : undefined;
 
+  // Localidad prioritaria del sourcing: opcional; vacía equivale a ausente.
+  const localidad = result.data[SOURCING_LOCALIDAD_VAR]?.trim();
+  const sourcingLocalidad = localidad !== undefined && localidad.length > 0 ? localidad : undefined;
+
   // Devolvemos un objeto nuevo (inmutable hacia afuera) con el shape de Env.
   return {
     anthropicApiKey: result.data[ANTHROPIC_API_KEY_VAR],
     ...(mercadoLibre !== undefined ? { mercadoLibre } : {}),
+    ...(sourcingLocalidad !== undefined ? { sourcingLocalidad } : {}),
   };
 }

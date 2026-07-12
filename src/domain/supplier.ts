@@ -6,6 +6,9 @@ export type SupplierStatus = "pendiente" | "contactado" | "cotizó" | "descartad
 /** Unidad a la que refiere el precio de mayoreo. */
 export type PriceUnit = "pieza" | "kg" | "tonelada" | "m2" | "unknown";
 
+/** Disponibilidad del producto en el proveedor (stock). */
+export type Availability = "disponible" | "sobre_pedido" | "unknown";
+
 /** Datos de contacto reunidos de un proveedor (nunca se envía nada). */
 export interface SupplierContact {
   email?: string;
@@ -27,6 +30,8 @@ export interface SupplierCandidate {
   wholesalePrice?: number;
   /** Unidad del precio (ej. por kg vs por pieza); ausente si no se conoce. */
   priceUnit?: PriceUnit;
+  /** Disponibilidad/stock reportada; ausente si no se conoce. */
+  availability?: Availability;
   currency?: string;
   /** Mínimo de compra (informativo; no ordena el ranking). */
   moq?: number;

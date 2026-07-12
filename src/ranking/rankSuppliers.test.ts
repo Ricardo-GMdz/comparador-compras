@@ -126,3 +126,31 @@ describe("rankSuppliers", () => {
     expect(rankSuppliers(list, "mx").map((s) => s.name)).toEqual(["x", "y", "z"]);
   });
 });
+
+describe("disponibilidad (stock) en la selección", () => {
+  it("prefiere como best uno con stock sobre uno sobre_pedido más barato", () => {
+    // Ambos confiables y en región: el sobre_pedido es más barato pero espera.
+    const list = [
+      sup({ name: "espera", wholesalePrice: 100, availability: "sobre_pedido" }),
+      sup({ name: "en-stock", wholesalePrice: 130, availability: "disponible" }),
+    ];
+    expect(selectBestSupplier(list, "mx")?.name).toBe("en-stock");
+  });
+
+  it("la disponibilidad desconocida no penaliza (compite normal)", () => {
+    // Sin availability (desconocida) y más barato: gana igual que antes.
+    const list = [
+      sup({ name: "sin-dato", wholesalePrice: 100 }),
+      sup({ name: "en-stock", wholesalePrice: 130, availability: "disponible" }),
+    ];
+    expect(selectBestSupplier(list, "mx")?.name).toBe("sin-dato");
+  });
+
+  it("si todos son sobre_pedido, igual elige el mejor de ellos", () => {
+    const list = [
+      sup({ name: "a", wholesalePrice: 150, availability: "sobre_pedido" }),
+      sup({ name: "b", wholesalePrice: 120, availability: "sobre_pedido" }),
+    ];
+    expect(selectBestSupplier(list, "mx")?.name).toBe("b");
+  });
+});

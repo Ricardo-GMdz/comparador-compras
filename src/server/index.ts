@@ -30,7 +30,7 @@ async function savePublicDirectory(suppliers: readonly PublicSupplier[]): Promis
 
 const client = new Anthropic({ apiKey: env.anthropicApiKey });
 const app = buildApi({
-  source: createSupplierSource({ client }),
+  source: createSupplierSource({ client, localidad: env.sourcingLocalidad }),
   loadDirectory,
   saveDirectory,
   savePublicDirectory,

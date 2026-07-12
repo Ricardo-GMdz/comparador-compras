@@ -157,10 +157,14 @@ export function selectBestSupplier(
   const cheapest = (list: readonly Supplier[]): Supplier | undefined =>
     list.length === 0 ? undefined : [...list].sort(byPriceAsc)[0];
 
-  return (
-    cheapest(eligible.filter((s) => s.trusted && isRegion(s))) ??
-    cheapest(eligible.filter((s) => s.trusted)) ??
-    cheapest(eligible.filter(isRegion)) ??
-    cheapest(eligible)
-  );
+  // Preferencia de stock: los "sobre_pedido" solo compiten si no hay alternativa
+  // con stock o de disponibilidad desconocida (lo desconocido NO penaliza).
+  const hasStockPreference = (s: Supplier): boolean => s.availability !== "sobre_pedido";
+  const chain = (list: readonly Supplier[]): Supplier | undefined =>
+    cheapest(list.filter((s) => s.trusted && isRegion(s))) ??
+    cheapest(list.filter((s) => s.trusted)) ??
+    cheapest(list.filter(isRegion)) ??
+    cheapest(list);
+
+  return chain(eligible.filter(hasStockPreference)) ?? chain(eligible);
 }

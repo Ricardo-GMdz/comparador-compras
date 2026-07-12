@@ -94,4 +94,35 @@ describe("parseSuppliers", () => {
       expect(result[0]).not.toHaveProperty("priceUnit");
     });
   });
+
+  describe("normalización de availability (stock)", () => {
+    it.each([
+      ["disponible", "disponible"],
+      ["en stock", "disponible"],
+      ["in stock", "disponible"],
+      ["entrega inmediata", "disponible"],
+      ["sobre pedido", "sobre_pedido"],
+      ["bajo pedido", "sobre_pedido"],
+      ["backorder", "sobre_pedido"],
+      ["  En Stock  ", "disponible"],
+    ])("normaliza '%s' a '%s'", (availability, expected) => {
+      const data = {
+        suppliers: [{ name: "X", material: "y", contact: {}, availability }],
+      };
+      const result = parseSuppliers(data, "mx");
+      expect(result[0]?.availability).toBe(expected);
+    });
+
+    it("omite availability no reconocida o ausente (equivale a desconocida)", () => {
+      const data = {
+        suppliers: [
+          { name: "A", material: "y", contact: {}, availability: "quién sabe" },
+          { name: "B", material: "y", contact: {} },
+        ],
+      };
+      const result = parseSuppliers(data, "mx");
+      expect(result[0]).not.toHaveProperty("availability");
+      expect(result[1]).not.toHaveProperty("availability");
+    });
+  });
 });

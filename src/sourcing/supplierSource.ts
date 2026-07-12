@@ -28,6 +28,8 @@ export interface SupplierQuery {
 /** Dependencias: el cliente Anthropic (inyectable para tests). */
 export interface SupplierSourceDeps {
   client: Anthropic;
+  /** Localidad prioritaria del usuario (ej. "San Nicolás de los Garza, NL"). */
+  localidad?: string;
 }
 
 export interface SupplierSource {
@@ -45,21 +47,37 @@ function buildSystemPrompt(): string {
     '{ "suppliers": [ { "name": string, "website"?: string, "material": string,',
     '  "wholesalePrice"?: number, "currency"?: string (ISO 4217), "moq"?: number,',
     '  "priceUnit"?: "pieza"|"kg"|"tonelada"|"m2",',
+    '  "availability"?: "disponible"|"sobre pedido",',
     '  "contact"?: { "email"?: string, "phone"?: string, "whatsapp"?: string, "formUrl"?: string },',
     '  "trusted"?: boolean, "notes"?: string } ] }.',
     'Cuando indiques "wholesalePrice", indicá también "priceUnit": la unidad a la que',
     "corresponde ese precio (por pieza, por kg, por tonelada o por m2).",
+    'Indicá "availability" cuando el proveedor publique si tiene stock/entrega inmediata',
+    "o si vende sobre pedido; si no lo publica, omití el campo (no lo inventes).",
+    "Si el proveedor no publica precio de mayoreo, NO lo descartes: reportá el precio",
+    "unitario disponible (o sin precio) — la falta de mayoreo no penaliza.",
     'Marcá "trusted": true solo para empresas reconocidas/verificables (con datos de contacto reales).',
-    'Priorizá precio de mayoreo y datos de contacto. Si no encontrás, devolvé { "suppliers": [] }.',
+    'Priorizá precio y datos de contacto. Si no encontrás, devolvé { "suppliers": [] }.',
   ].join("\n");
 }
 
-function buildUserPrompt(q: SupplierQuery): string {
-  return [
+function buildUserPrompt(q: SupplierQuery, localidad?: string): string {
+  const lineas = [
     `Buscá proveedores al por mayor de: "${q.query}".`,
     `Región objetivo: "${q.region}". Preferí proveedores de esa región y su moneda.`,
+  ];
+  if (localidad !== undefined && localidad.trim().length > 0) {
+    lineas.push(
+      `PRIORIDAD 1: proveedores locales de ${localidad.trim()} o su zona metropolitana;`,
+      "después el resto de la región. Indicá la ciudad del proveedor en 'notes' si la conocés.",
+    );
+  }
+  lineas.push(
+    "Priorizá también el costo del producto y, si el proveedor tiene stock/entrega",
+    "inmediata, reportalo en 'availability'.",
     "Incluí su web y datos de contacto (email/teléfono/WhatsApp/formulario) cuando estén.",
-  ].join("\n");
+  );
+  return lineas.join("\n");
 }
 
 function buildEnrichSystemPrompt(): string {
@@ -142,7 +160,7 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
       tools: [
         { type: WEB_SEARCH_TOOL_TYPE, name: WEB_SEARCH_TOOL_NAME, max_uses: MAX_WEB_SEARCH_USES },
       ],
-      messages: [{ role: "user", content: buildUserPrompt(q) }],
+      messages: [{ role: "user", content: buildUserPrompt(q, deps.localidad) }],
     });
 
     const text = extractText(response.content);
