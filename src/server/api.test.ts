@@ -427,6 +427,58 @@ describe("API", () => {
   });
 });
 
+describe("v2.2: PATCH favorite y CSV", () => {
+  it("PATCH { favorite: true } persiste en el directorio", async () => {
+    const { deps, store } = fakeDeps([
+      {
+        name: "X",
+        website: "https://x.mx",
+        material: "m",
+        region: "mx",
+        trusted: true,
+        contact: {},
+        status: "pendiente",
+        firstSeen: "2026-07-01T00:00:00.000Z",
+        lastSeen: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    const app = buildApi(deps);
+    const res = await app.request("/api/proveedor/d%3Ax.mx", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ favorite: true }),
+    });
+    expect(res.status).toBe(200);
+    expect(store.current[0]?.favorite).toBe(true);
+  });
+
+  it("el CSV incluye las columnas catalogPrice, address y favorite", async () => {
+    const { deps } = fakeDeps([
+      {
+        name: "X",
+        material: "m",
+        region: "mx",
+        trusted: true,
+        contact: {},
+        status: "pendiente",
+        catalogPrice: 439.99,
+        address: "Monterrey",
+        favorite: true,
+        firstSeen: "2026-07-01T00:00:00.000Z",
+        lastSeen: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    const app = buildApi(deps);
+    const res = await app.request("/api/directorio.csv");
+    const text = await res.text();
+    expect(text.split("\n")[0]).toContain("catalogPrice");
+    expect(text.split("\n")[0]).toContain("address");
+    expect(text.split("\n")[0]).toContain("favorite");
+    expect(text).toContain("439.99");
+    expect(text).toContain("Monterrey");
+  });
+});
+
 describe("API — auth y público", () => {
   const NOW_MS = 5_000_000;
 
