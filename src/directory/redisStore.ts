@@ -24,9 +24,7 @@ export function createRedisStore(redis: RedisLike) {
       return [];
     }
     // Validamos con el MISMO schema que el store de archivo (dato externo).
-    // El `.default("pendiente")` de zod hace que el tipo inferido no coincida
-    // exactamente con `Supplier`; casteamos el resultado ya validado.
-    return directorySchema.parse(JSON.parse(raw)) as Supplier[];
+    return directorySchema.parse(JSON.parse(raw));
   }
 
   async function saveDirectory(_path: string, suppliers: readonly Supplier[]): Promise<void> {
@@ -38,6 +36,8 @@ export function createRedisStore(redis: RedisLike) {
     if (raw === null) {
       return [];
     }
+    // El público lo escribe siempre esta misma app (regenerado desde el
+    // directorio privado ya validado): no re-validamos con zod acá.
     return JSON.parse(raw) as PublicSupplier[];
   }
 
