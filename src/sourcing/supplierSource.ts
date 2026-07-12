@@ -25,11 +25,22 @@ export interface SupplierQuery {
   region: string;
 }
 
+/** Presupuesto opcional para acotar la búsqueda (deploy con límite de tiempo). */
+export interface SearchBudget {
+  maxWebSearchUses: number;
+  maxEmptyRetries: number;
+  maxTokens: number;
+  /** Si está presente, thinking pasa a "enabled" con este budget; si no, "adaptive". */
+  thinkingBudgetTokens?: number;
+}
+
 /** Dependencias: el cliente Anthropic (inyectable para tests). */
 export interface SupplierSourceDeps {
   client: Anthropic;
   /** Localidad prioritaria del usuario (ej. "San Nicolás de los Garza, NL"). */
   localidad?: string;
+  /** Acota la búsqueda para caber en un límite de tiempo (sin él: sin recortes). */
+  searchBudget?: SearchBudget;
 }
 
 export interface SupplierSource {
@@ -151,14 +162,23 @@ function parseJsonObject(text: string): unknown {
 
 /** Crea una fuente de proveedores que usa web_search. */
 export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
+  // Valores efectivos: si hay searchBudget se acotan, si no se usan los defaults.
+  const maxWebSearchUses = deps.searchBudget?.maxWebSearchUses ?? MAX_WEB_SEARCH_USES;
+  const maxEmptyRetries = deps.searchBudget?.maxEmptyRetries ?? MAX_EMPTY_RETRIES;
+  const maxTokens = deps.searchBudget?.maxTokens ?? MAX_TOKENS;
+  const thinking =
+    deps.searchBudget?.thinkingBudgetTokens !== undefined
+      ? ({ type: "enabled", budget_tokens: deps.searchBudget.thinkingBudgetTokens } as const)
+      : ({ type: "adaptive" } as const);
+
   async function searchOnce(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
     const response = await deps.client.messages.create({
       model: MODEL,
-      max_tokens: MAX_TOKENS,
-      thinking: { type: "adaptive" },
+      max_tokens: maxTokens,
+      thinking,
       system: buildSystemPrompt(),
       tools: [
-        { type: WEB_SEARCH_TOOL_TYPE, name: WEB_SEARCH_TOOL_NAME, max_uses: MAX_WEB_SEARCH_USES },
+        { type: WEB_SEARCH_TOOL_TYPE, name: WEB_SEARCH_TOOL_NAME, max_uses: maxWebSearchUses },
       ],
       messages: [{ role: "user", content: buildUserPrompt(q, deps.localidad) }],
     });
@@ -174,14 +194,14 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
     return parseSuppliers(parseJsonObject(text), q.region);
   }
 
-  // Busca con hasta MAX_EMPTY_RETRIES reintentos si la búsqueda viene vacía.
+  // Busca con hasta maxEmptyRetries reintentos si la búsqueda viene vacía.
   async function search(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
-    for (let attempt = 0; attempt <= MAX_EMPTY_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= maxEmptyRetries; attempt += 1) {
       const candidates = await searchOnce(q);
       if (candidates.length > 0) {
         return candidates;
       }
-      if (attempt < MAX_EMPTY_RETRIES) {
+      if (attempt < maxEmptyRetries) {
         logger.warn("sourcing: búsqueda sin proveedores, reintentando", {
           query: q.query,
           region: q.region,
