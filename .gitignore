@@ -5,6 +5,9 @@
 node_modules/
 .DS_Store
 dist/
+# Salida del build de Vercel (regenerada desde web/ por build:vercel).
+public/
+.vercel/
 coverage/
 .superpowers/
 directorio.json

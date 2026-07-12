@@ -2,7 +2,9 @@
 // Dependencias inyectadas.
 
 import { Hono } from "hono";
+import { getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
+import { COOKIE_NAME, PUBLIC_PATHS, hashEqual, makeToken, verifyToken } from "./auth.js";
 import type { Supplier } from "../domain/supplier.js";
 import type { SupplierSource } from "../sourcing/supplierSource.js";
 import { mergeSuppliers, removeSupplier, supplierKey, updateSupplier } from "../directory/store.js";
@@ -18,9 +20,16 @@ export interface ApiDeps {
   saveDirectory: (path: string, suppliers: readonly Supplier[]) => Promise<void>;
   /** Escribe el directorio público (la selección que muestra la landing). */
   savePublicDirectory: (suppliers: readonly PublicSupplier[]) => Promise<void>;
+  /** Lee el directorio público (para /api/publico). */
+  loadPublicDirectory: () => Promise<readonly PublicSupplier[]>;
   now: () => string;
   directoryPath: string;
+  /** Si está presente, todas las rutas /api exigen la clave (menos login/publico). */
+  auth?: { accessKey: string; now?: () => number };
 }
+
+// Duración de la cookie de sesión: 30 días.
+const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 
 const buscarSchema = z.object({
   query: z.string().min(1),
@@ -121,6 +130,44 @@ function activeSuppliers(suppliers: readonly Supplier[]): readonly Supplier[] {
 export function buildApi(deps: ApiDeps): Hono {
   const app = new Hono();
 
+  if (deps.auth !== undefined) {
+    const { accessKey } = deps.auth;
+    const now = deps.auth.now ?? (() => Date.now());
+
+    // Middleware: exige cookie válida en /api/* (menos login y público).
+    app.use("*", async (c, next) => {
+      // Usamos c.req.path (decodeado igual que el router de Hono): con
+      // new URL().pathname el path NO se percent-decodea y una ruta encodeada
+      // como /%61pi/directorio evadiría el guard pero igual routearía. Deben
+      // ver el path idéntico middleware y router.
+      const path = c.req.path;
+      if (!path.startsWith("/api/") || PUBLIC_PATHS.has(path)) {
+        return next();
+      }
+      if (verifyToken(getCookie(c, COOKIE_NAME), accessKey, now())) {
+        return next();
+      }
+      return c.json({ ok: false, error: "No autorizado. Ingresá la clave de acceso." }, 401);
+    });
+
+    app.post("/api/login", async (c) => {
+      const body = (await c.req.json().catch(() => ({}))) as { key?: unknown };
+      const key = typeof body.key === "string" ? body.key : "";
+      if (!hashEqual(key, accessKey)) {
+        return c.json({ ok: false, error: "Clave incorrecta." }, 401);
+      }
+      const exp = now() + SESSION_MS;
+      setCookie(c, COOKIE_NAME, makeToken(exp, accessKey), {
+        httpOnly: true,
+        secure: true,
+        sameSite: "Lax",
+        maxAge: SESSION_MS / 1000,
+        path: "/",
+      });
+      return c.json({ ok: true });
+    });
+  }
+
   app.get("/api/directorio", async (c) => {
     const suppliers = await deps.loadDirectory(deps.directoryPath);
     const region = c.req.query("region") ?? "global";
@@ -133,6 +180,12 @@ export function buildApi(deps: ApiDeps): Hono {
       "content-type": "text/csv; charset=utf-8",
       "content-disposition": 'attachment; filename="directorio.csv"',
     });
+  });
+
+  // Directorio público (sin clave): la landing lo consume. CORS abierto a propósito.
+  app.get("/api/publico", async (c) => {
+    const publicSuppliers = await deps.loadPublicDirectory();
+    return c.json(publicSuppliers, 200, { "access-control-allow-origin": "*" });
   });
 
   app.post("/api/buscar", async (c) => {

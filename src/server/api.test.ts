@@ -41,6 +41,7 @@ function fakeDeps(existing: Supplier[] = []) {
       savePublicDirectory: vi.fn(async (suppliers: readonly PublicSupplier[]) => {
         published.current = suppliers;
       }),
+      loadPublicDirectory: vi.fn(async () => published.current ?? []),
       source: {
         search: vi.fn(async () => [
           {
@@ -423,5 +424,81 @@ describe("API", () => {
     expect(res.status).toBe(500);
     const body = (await res.json()) as ApiBody;
     expect(body.ok).toBe(false);
+  });
+});
+
+describe("API — auth y público", () => {
+  const NOW_MS = 5_000_000;
+
+  it("sin cookie, una ruta protegida responde 401", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi({ ...deps, auth: { accessKey: "secreta", now: () => NOW_MS } });
+    const res = await app.request("/api/directorio");
+    expect(res.status).toBe(401);
+  });
+
+  it("login con clave correcta setea cookie y habilita el acceso", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi({ ...deps, auth: { accessKey: "secreta", now: () => NOW_MS } });
+
+    const login = await app.request("/api/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "secreta" }),
+    });
+    expect(login.status).toBe(200);
+    const cookie = login.headers.get("set-cookie") ?? "";
+    expect(cookie).toContain("cc_auth=");
+
+    const jar = cookie.split(";")[0];
+    const ok = await app.request("/api/directorio", { headers: { cookie: jar } });
+    expect(ok.status).toBe(200);
+  });
+
+  it("login con clave incorrecta responde 401 sin cookie", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi({ ...deps, auth: { accessKey: "secreta", now: () => NOW_MS } });
+    const res = await app.request("/api/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "incorrecta" }),
+    });
+    expect(res.status).toBe(401);
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("GET /api/publico responde sin clave, con CORS, y solo campos públicos", async () => {
+    const { deps } = fakeDeps();
+    deps.loadPublicDirectory = vi.fn(async () => [
+      {
+        name: "Pub",
+        material: "m",
+        region: "mx",
+        contact: {},
+        trusted: true,
+        status: "contactado",
+      },
+    ]);
+    const app = buildApi({ ...deps, auth: { accessKey: "secreta", now: () => NOW_MS } });
+    const res = await app.request("/api/publico");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    const body = (await res.json()) as Array<Record<string, unknown>>;
+    expect(body[0]?.name).toBe("Pub");
+    expect(body[0]).not.toHaveProperty("notes");
+  });
+
+  it("no se evade la clave con el path percent-encodeado", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi({ ...deps, auth: { accessKey: "secreta", now: () => NOW_MS } });
+    const res = await app.request("/%61pi/directorio"); // %61 = "a"
+    expect(res.status).toBe(401);
+  });
+
+  it("sin auth (entry local) las rutas no exigen cookie", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi(deps); // sin `auth`
+    const res = await app.request("/api/directorio");
+    expect(res.status).toBe(200);
   });
 });

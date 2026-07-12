@@ -57,6 +57,7 @@ describe("smoke E2E del server de sourcing", () => {
       loadDirectory,
       saveDirectory,
       savePublicDirectory: vi.fn(async () => {}),
+      loadPublicDirectory: vi.fn(async () => []),
       now: () => new Date().toISOString(),
       directoryPath: join(tempDir, "directorio.json"),
     });
