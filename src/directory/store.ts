@@ -142,6 +142,7 @@ const supplierSchema = z.object({
   region: z.string(),
   wholesalePrice: z.number().optional(),
   priceUnit: z.enum(["pieza", "kg", "tonelada", "m2", "unknown"]).optional(),
+  availability: z.enum(["disponible", "sobre_pedido", "unknown"]).optional(),
   currency: z.string().optional(),
   moq: z.number().optional(),
   contact: contactSchema,

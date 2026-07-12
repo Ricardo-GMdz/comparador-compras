@@ -1,7 +1,12 @@
 // Validación y parseo defensivo de la respuesta del modelo → SupplierCandidate[].
 
 import { z } from "zod";
-import type { PriceUnit, SupplierCandidate, SupplierContact } from "../domain/supplier.js";
+import type {
+  Availability,
+  PriceUnit,
+  SupplierCandidate,
+  SupplierContact,
+} from "../domain/supplier.js";
 
 // Mapa de normalización: texto libre del modelo → unidad de precio canónica.
 // Las claves se comparan en minúsculas y sin el prefijo "por ".
@@ -30,8 +35,33 @@ const PRICE_UNIT_MAP: Readonly<Record<string, PriceUnit>> = {
 /** Normaliza la unidad textual del modelo; undefined si no se reconoce. */
 function normalizePriceUnit(raw: string | undefined): PriceUnit | undefined {
   if (raw === undefined) return undefined;
-  const key = raw.trim().toLowerCase().replace(/^por\s+/, "");
+  const key = raw
+    .trim()
+    .toLowerCase()
+    .replace(/^por\s+/, "");
   return PRICE_UNIT_MAP[key];
+}
+
+// Mapa de normalización de disponibilidad: texto libre del modelo → canónico.
+const AVAILABILITY_MAP: Readonly<Record<string, Availability>> = {
+  disponible: "disponible",
+  "en stock": "disponible",
+  "in stock": "disponible",
+  stock: "disponible",
+  inmediata: "disponible",
+  "entrega inmediata": "disponible",
+  "sobre pedido": "sobre_pedido",
+  sobre_pedido: "sobre_pedido",
+  "bajo pedido": "sobre_pedido",
+  "a pedido": "sobre_pedido",
+  backorder: "sobre_pedido",
+  "por encargo": "sobre_pedido",
+};
+
+/** Normaliza la disponibilidad textual del modelo; undefined si no se reconoce. */
+function normalizeAvailability(raw: string | undefined): Availability | undefined {
+  if (raw === undefined) return undefined;
+  return AVAILABILITY_MAP[raw.trim().toLowerCase()];
 }
 
 const rawContactSchema = z.object({
@@ -49,6 +79,7 @@ const rawSupplierSchema = z.object({
   currency: z.string().optional(),
   moq: z.number().optional(),
   priceUnit: z.string().optional(),
+  availability: z.string().optional(),
   contact: rawContactSchema.optional(),
   trusted: z.boolean().optional(),
   notes: z.string().optional(),
@@ -83,6 +114,7 @@ function toContact(raw: RawSupplier["contact"]): SupplierContact {
 function toCandidate(raw: RawSupplier, region: string): SupplierCandidate {
   const wholesalePrice = validPrice(raw.wholesalePrice);
   const priceUnit = normalizePriceUnit(raw.priceUnit);
+  const availability = normalizeAvailability(raw.availability);
   return {
     name: raw.name,
     material: raw.material,
@@ -94,6 +126,7 @@ function toCandidate(raw: RawSupplier, region: string): SupplierCandidate {
     ...(raw.currency !== undefined ? { currency: raw.currency } : {}),
     ...(raw.moq !== undefined ? { moq: raw.moq } : {}),
     ...(priceUnit !== undefined ? { priceUnit } : {}),
+    ...(availability !== undefined ? { availability } : {}),
     ...(raw.notes !== undefined ? { notes: raw.notes } : {}),
   };
 }
