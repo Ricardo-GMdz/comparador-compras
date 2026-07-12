@@ -481,6 +481,13 @@ describe("API — auth y público", () => {
     expect(body[0]).not.toHaveProperty("notes");
   });
 
+  it("no se evade la clave con el path percent-encodeado", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi({ ...deps, auth: { accessKey: "secreta", now: () => NOW_MS } });
+    const res = await app.request("/%61pi/directorio"); // %61 = "a"
+    expect(res.status).toBe(401);
+  });
+
   it("sin auth (entry local) las rutas no exigen cookie", async () => {
     const { deps } = fakeDeps();
     const app = buildApi(deps); // sin `auth`

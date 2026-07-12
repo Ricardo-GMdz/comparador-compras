@@ -136,7 +136,11 @@ export function buildApi(deps: ApiDeps): Hono {
 
     // Middleware: exige cookie válida en /api/* (menos login y público).
     app.use("*", async (c, next) => {
-      const path = new URL(c.req.url).pathname;
+      // Usamos c.req.path (decodeado igual que el router de Hono): con
+      // new URL().pathname el path NO se percent-decodea y una ruta encodeada
+      // como /%61pi/directorio evadiría el guard pero igual routearía. Deben
+      // ver el path idéntico middleware y router.
+      const path = c.req.path;
       if (!path.startsWith("/api/") || PUBLIC_PATHS.has(path)) {
         return next();
       }
