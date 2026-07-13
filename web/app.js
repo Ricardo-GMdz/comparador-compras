@@ -155,8 +155,8 @@ function accionesFor(s, key) {
   const star = s.favorite ? "★" : "☆";
   return `
     <button type="button" class="fav ${s.favorite ? "fav-on" : ""}" data-action="favorito" data-key="${esc(key)}" title="Favorito">${star}</button>
-    <button type="button" data-action="cotizar" data-key="${esc(key)}" title="Cotizar">✉️</button>
-    <button type="button" data-action="enriquecer" data-key="${esc(key)}" title="Completar datos">🔍</button>
+    <button type="button" data-action="cotizar" data-key="${esc(key)}" title="Cotizar">✉️ Cotizar</button>
+    <button type="button" data-action="enriquecer" data-key="${esc(key)}" title="Completar datos">🔍 Completar</button>
     <button type="button" data-action="borrar" data-key="${esc(key)}" title="Borrar">🗑</button>`;
 }
 
@@ -185,7 +185,7 @@ function renderTable(suppliers, targetId = "tabla") {
       : `
     <table>
       <colgroup>
-        <col style="width:14%" /><col style="width:15%" /><col style="width:6%" /><col style="width:5%" /><col style="width:6%" /><col style="width:8%" /><col style="width:9%" /><col style="width:10%" /><col style="width:13%" /><col style="width:14%" />
+        <col style="width:14%" /><col style="width:14%" /><col style="width:6%" /><col style="width:5%" /><col style="width:5%" /><col style="width:8%" /><col style="width:9%" /><col style="width:9%" /><col style="width:12%" /><col style="width:18%" />
       </colgroup>
       <thead><tr>
       <th>Proveedor</th><th>Material</th><th>Mayoreo</th><th>Mín.</th><th>Región</th><th>Contacto</th><th>Confianza</th><th>Estado</th><th>Notas</th><th>Acciones</th>
@@ -343,7 +343,7 @@ async function enriquecerProveedor(key, boton) {
   } finally {
     // Si la tabla no se re-renderizó (error), se rehabilita el botón original.
     boton.disabled = false;
-    boton.textContent = "🔍";
+    boton.textContent = "🔍 Completar";
   }
 }
 
