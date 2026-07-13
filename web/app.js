@@ -126,10 +126,21 @@ function renderBest(best) {
     return;
   }
   el.classList.remove("hidden");
+  // Precio a mostrar: mayoreo si hay; si no, catálogo (marcado); si no, a cotizar.
+  const precio =
+    price(best) !== "—"
+      ? price(best)
+      : catalogPrice(best) !== "—"
+        ? `${catalogPrice(best)} · catálogo`
+        : "Precio a cotizar";
   el.innerHTML = `
-    <span class="badge">★ Mejor opción</span>
+    <div class="best-top">
+      <span class="badge">Mejor opción</span>
+      ${best.trusted ? '<span class="sello">✓ Confiable</span>' : ""}
+    </div>
     <h3>${esc(best.name)}</h3>
-    <div class="meta">${esc(best.material)} · ${esc(best.region)} · ${price(best)}${best.moq !== undefined ? " · mín. " + esc(best.moq) : ""}</div>
+    <div class="best-precio num">${precio}</div>
+    <div class="meta">${esc(best.material)} · ${esc(best.region)}${best.moq !== undefined ? " · mín. " + esc(best.moq) : ""}</div>
     <div class="contacts">${contactFor(best)}</div>`;
 }
 

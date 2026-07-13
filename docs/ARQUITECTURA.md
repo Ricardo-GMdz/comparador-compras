@@ -76,6 +76,15 @@ suma `catalogPrice`, `address`, `favorite`; el directorio público suma
 
 ### v2.3 — navegación con sidebar y CSV resumido
 
+**Identidad visual — "Placa industrial"** (`web/styles.css`): sistema de diseño
+deliberado para una cabina de compras B2B. Rail de **grafito** (`#1a1d21`) +
+superficie **papel**, acento **latón** (`#b8862b`) para precios/CTA, **verdigrís**
+(`#3f7a6d`) para "confiable"/stock y **óxido** para descartado/error. Tipografía
+**IBM Plex Sans** (UI) + **IBM Plex Mono** (datos, etiquetas y precios en
+numerales tabulares, como lectura de instrumento). Firma: la **mejor opción** se
+muestra como una **placa estampada** (eyebrow mono, sello verdigrís "✓ Confiable",
+precio grande en latón). Todo el color y la tipografía se derivan de tokens CSS.
+
 El frontend se reorganiza con un **sidebar**: **Inicio** (el buscador, los
 resultados de la última búsqueda y un vistazo a los favoritos) e **Historial**
 (el directorio completo con
