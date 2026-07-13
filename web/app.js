@@ -147,7 +147,7 @@ function accionesFor(s, key) {
     <button type="button" data-action="borrar" data-key="${esc(key)}">🗑</button>`;
 }
 
-function renderTable(suppliers) {
+function renderTable(suppliers, targetId = "tabla") {
   const rows = suppliers
     .map((s) => {
       const key = keyOf(s);
@@ -166,7 +166,7 @@ function renderTable(suppliers) {
     </tr>`;
     })
     .join("");
-  $("tabla").innerHTML =
+  $(targetId).innerHTML =
     suppliers.length === 0
       ? ""
       : `
@@ -203,9 +203,20 @@ function filtrados() {
   return ordenada;
 }
 
+// Pinta la sección de favoritos de Inicio (reusa la tabla; mensaje si no hay).
+function renderFavoritos() {
+  const favs = directorio.filter((s) => s.favorite === true);
+  if (favs.length === 0) {
+    $("favoritos").innerHTML = '<p class="vacio">Todavía no marcaste favoritos.</p>';
+    return;
+  }
+  renderTable(favs, "favoritos");
+}
+
 function render() {
   $("total").textContent = `${directorio.length} en el directorio`;
   renderBest(mejorOpcion);
+  renderFavoritos();
   renderTable(filtrados());
 }
 
@@ -498,15 +509,14 @@ $("publicar").addEventListener("click", async () => {
   }
 });
 
-// Delegación: cambios de estado por fila.
-$("tabla").addEventListener("change", (e) => {
+// Handlers de fila (se usan tanto en la tabla del Historial como en favoritos).
+function onFilaChange(e) {
   const select = e.target.closest(".estado-select");
   if (!select) return;
   patchProveedor(select.dataset.key, { status: select.value });
-});
+}
 
-// Delegación: notas y botones de acción por fila.
-$("tabla").addEventListener("click", (e) => {
+function onFilaClick(e) {
   const el = e.target.closest("[data-action]");
   if (!el) return;
   const key = el.dataset.key;
@@ -528,7 +538,12 @@ $("tabla").addEventListener("click", (e) => {
     e.preventDefault();
     abrirDetalle(supplier);
   }
-});
+}
+
+$("tabla").addEventListener("change", onFilaChange);
+$("tabla").addEventListener("click", onFilaClick);
+$("favoritos").addEventListener("change", onFilaChange);
+$("favoritos").addEventListener("click", onFilaClick);
 
 $("mCantidad").addEventListener("input", generarMensaje);
 $("mSpec").addEventListener("input", generarMensaje);
