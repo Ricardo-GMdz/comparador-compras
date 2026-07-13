@@ -336,13 +336,14 @@ body {
 }
 table {
   width: 100%;
-  min-width: 720px;
+  min-width: 680px;
+  table-layout: fixed;
   border-collapse: collapse;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
-  font-size: 13px;
+  font-size: 12.5px;
 }
 th {
   text-align: left;
@@ -350,16 +351,17 @@ th {
   font-family: var(--font-mono);
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   font-weight: 600;
-  padding: 12px 14px;
+  padding: 11px 10px;
   border-bottom: 1px solid var(--line-strong);
   background: rgba(26, 29, 33, 0.02);
 }
 td {
-  padding: 13px 14px;
+  padding: 11px 10px;
   border-top: 1px solid var(--line);
   vertical-align: top;
+  overflow-wrap: anywhere;
 }
 tbody tr:hover {
   background: rgba(184, 134, 43, 0.045);
@@ -443,9 +445,10 @@ select.input {
 
 /* ---------- Estado / acciones por fila ---------- */
 .estado-select {
+  width: 100%;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  padding: 5px 8px;
+  padding: 5px 6px;
   font-family: var(--font-mono);
   font-size: 11px;
   background: var(--card);
@@ -456,7 +459,6 @@ select.input {
   cursor: pointer;
   color: var(--muted);
   font-size: 12px;
-  width: 260px;
 }
 .notas:hover {
   color: var(--brass-deep);
@@ -470,17 +472,19 @@ select.input {
   overflow: hidden;
 }
 .acciones {
-  white-space: nowrap;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
 }
 .acciones button {
   border: 1px solid var(--line-strong);
   background: var(--card);
   border-radius: var(--radius-sm);
-  padding: 5px 8px;
-  font-size: 12px;
+  padding: 4px 5px;
+  font-size: 13px;
+  line-height: 1;
   color: var(--ink-soft);
   cursor: pointer;
-  margin-right: 4px;
   transition:
     border-color 0.15s ease,
     background 0.15s ease;
