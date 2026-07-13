@@ -74,6 +74,20 @@ favoritos / nombre / reciente) y filtro **"solo favoritos"** (client-side). El C
 suma `catalogPrice`, `address`, `favorite`; el directorio público suma
 `catalogPrice`/`address` (no `favorite`).
 
+### v2.3 — navegación con sidebar y CSV resumido
+
+El frontend se reorganiza con un **sidebar**: **Inicio** (el buscador, los
+resultados de la última búsqueda y un vistazo a los favoritos) e **Historial**
+(el directorio completo con
+filtro/orden/estados/acciones/CSV/Publicar). Es navegación client-side pura
+(`mostrarVista` togglea `#vista-inicio`/`#vista-historial`, sin router); el
+estado en memoria se comparte y la sección de favoritos reusa `renderTable`
+(parametrizada por contenedor) con los mismos handlers de fila. El **CSV** pasa a
+un resumen legible en español de 12 columnas (Proveedor, Sitio web, Material,
+Región, **Precio** [efectivo: mayoreo ?? catálogo], **Moneda**, Email, WhatsApp,
+Teléfono, **Dirección**, Estado, Favorito); se quitan las columnas internas
+(priceUnit, moq, formUrl, trusted, notes, timestamps).
+
 ### Flujo end-to-end
 
 ```

@@ -19,6 +19,8 @@ body {
   background: #faf9fe;
 }
 .wrap {
+  flex: 1;
+  min-width: 0;
   max-width: 960px;
   margin: 0 auto;
   padding: 28px 20px;
@@ -371,4 +373,73 @@ td {
 }
 .d-val {
   text-align: right;
+}
+
+/* Layout con sidebar */
+.layout {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+.sidebar {
+  flex: 0 0 200px;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 22px 14px;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+.sidebar .brand {
+  font-weight: 700;
+  font-size: 18px;
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nav-item {
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.nav-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+.nav-item.active {
+  background: rgba(99, 102, 241, 0.15);
+  font-weight: 600;
+}
+.vista.hidden {
+  display: none;
+}
+.seccion-titulo {
+  font-size: 16px;
+  margin: 22px 0 10px;
+}
+@media (max-width: 720px) {
+  .layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  .nav {
+    flex-direction: row;
+  }
+}
+
+.vacio {
+  opacity: 0.6;
+  font-size: 14px;
 }

@@ -7,67 +7,84 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <main class="wrap">
-      <div id="login" class="login-overlay hidden">
-        <form id="loginForm" class="login-card">
-          <h2>Clave de acceso</h2>
-          <p class="login-hint">Esta app consume tokens; ingresá la clave compartida.</p>
-          <input
-            id="loginKey"
-            class="input"
-            type="password"
-            placeholder="Clave"
-            autocomplete="current-password"
-          />
-          <button class="btn" type="submit">Entrar</button>
-          <div id="loginError" class="login-error"></div>
-        </form>
-      </div>
-
-      <header class="topbar">
-        <div class="brand"><span class="logo">⌁</span> Proveedores</div>
-        <div class="counters">
-          <span id="total" class="chip chip-indigo">0 en el directorio</span>
-        </div>
-      </header>
-
-      <form id="buscar" class="search">
-        <input id="query" class="input" placeholder="Ej. láminas de metal galvanizadas" />
-        <input id="region" class="input region" value="global" placeholder="global" />
-        <button class="btn" type="submit">Buscar</button>
+    <div id="login" class="login-overlay hidden">
+      <form id="loginForm" class="login-card">
+        <h2>Clave de acceso</h2>
+        <p class="login-hint">Esta app consume tokens; ingresá la clave compartida.</p>
+        <input
+          id="loginKey"
+          class="input"
+          type="password"
+          placeholder="Clave"
+          autocomplete="current-password"
+        />
+        <button class="btn" type="submit">Entrar</button>
+        <div id="loginError" class="login-error"></div>
       </form>
+    </div>
 
-      <div class="toolbar">
-        <input id="filtro" class="input" placeholder="Filtrar por nombre o material…" />
-        <select id="filtroEstado" class="input select-estado">
-          <option value="todos">Todos</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="contactado">Contactado</option>
-          <option value="cotizó">Cotizó</option>
-          <option value="descartado">Descartado</option>
-        </select>
-        <select id="orden" class="input select-estado">
-          <option value="reciente">Orden: reciente</option>
-          <option value="precio">Orden: precio ↑</option>
-          <option value="favoritos">Orden: favoritos</option>
-          <option value="nombre">Orden: nombre</option>
-        </select>
-        <label class="fav-filtro"><input type="checkbox" id="soloFav" /> Solo favoritos</label>
-        <a class="csv-link" href="/api/directorio.csv" download>⬇ Exportar CSV</a>
-        <button
-          id="publicar"
-          class="csv-link"
-          type="button"
-          title="Publica los contactados/cotizó (sin notas) para que se vean en la landing"
-        >
-          🌐 Publicar
-        </button>
-      </div>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand"><span class="logo">⌁</span> Proveedores</div>
+        <nav class="nav">
+          <button type="button" class="nav-item active" data-vista="inicio">🔎 Inicio</button>
+          <button type="button" class="nav-item" data-vista="historial">📋 Historial</button>
+        </nav>
+      </aside>
 
-      <section id="best" class="best hidden"></section>
-      <section id="tabla"></section>
-      <p id="status" class="status"></p>
-    </main>
+      <main class="wrap">
+        <header class="topbar">
+          <span id="total" class="chip chip-indigo">0 en el directorio</span>
+        </header>
+
+        <section id="vista-inicio" class="vista">
+          <form id="buscar" class="search">
+            <input id="query" class="input" placeholder="Ej. láminas de metal galvanizadas" />
+            <input id="region" class="input region" value="global" placeholder="global" />
+            <button class="btn" type="submit">Buscar</button>
+          </form>
+          <section id="best" class="best hidden"></section>
+          <section id="resultados-wrap" class="hidden">
+            <h2 class="seccion-titulo">Resultados de tu búsqueda</h2>
+            <section id="resultados"></section>
+          </section>
+          <h2 class="seccion-titulo">Tus favoritos</h2>
+          <section id="favoritos"></section>
+        </section>
+
+        <section id="vista-historial" class="vista hidden">
+          <div class="toolbar">
+            <input id="filtro" class="input" placeholder="Filtrar por nombre o material…" />
+            <select id="filtroEstado" class="input select-estado">
+              <option value="todos">Todos</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="contactado">Contactado</option>
+              <option value="cotizó">Cotizó</option>
+              <option value="descartado">Descartado</option>
+            </select>
+            <select id="orden" class="input select-estado">
+              <option value="reciente">Orden: reciente</option>
+              <option value="precio">Orden: precio ↑</option>
+              <option value="favoritos">Orden: favoritos</option>
+              <option value="nombre">Orden: nombre</option>
+            </select>
+            <label class="fav-filtro"><input type="checkbox" id="soloFav" /> Solo favoritos</label>
+            <a class="csv-link" href="/api/directorio.csv" download>⬇ Exportar CSV</a>
+            <button
+              id="publicar"
+              class="csv-link"
+              type="button"
+              title="Publica los contactados/cotizó (sin notas) para que se vean en la landing"
+            >
+              🌐 Publicar
+            </button>
+          </div>
+          <section id="tabla"></section>
+        </section>
+
+        <p id="status" class="status"></p>
+      </main>
+    </div>
 
     <div id="modal" class="modal hidden">
       <div class="modal-card">

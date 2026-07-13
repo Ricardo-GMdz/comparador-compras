@@ -210,7 +210,7 @@ describe("API", () => {
     const { deps } = fakeDeps([
       makeSupplier({ name: "Aceros", website: "https://a.mx", wholesalePrice: 180 }),
       // Campo con coma: debe salir entre comillas en el CSV.
-      makeSupplier({ name: "B", website: "https://b.mx", notes: "ojo, es caro" }),
+      makeSupplier({ name: "B", website: "https://b.mx", address: "Monterrey, NL" }),
     ]);
     const app = buildApi(deps);
     const res = await app.request("/api/directorio.csv");
@@ -220,10 +220,10 @@ describe("API", () => {
     const lines = text.split("\n");
     // Header + una fila por proveedor.
     expect(lines).toHaveLength(3);
-    expect(lines[0]).toContain("name");
-    expect(lines[0]).toContain("status");
+    expect(lines[0]).toContain("Proveedor");
+    expect(lines[0]).toContain("Estado");
     expect(text).toContain("Aceros");
-    expect(text).toContain('"ojo, es caro"');
+    expect(text).toContain('"Monterrey, NL"');
   });
 
   it("GET /api/directorio incluye a los descartados en suppliers", async () => {
@@ -427,6 +427,22 @@ describe("API", () => {
   });
 });
 
+describe("v2.3: /api/buscar devuelve los encontrados", () => {
+  it("incluye 'encontrados' con los proveedores hallados en esa búsqueda", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi(deps);
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "lámina", region: "mx" }),
+    });
+    const data = (await res.json()) as { ok: boolean; encontrados?: Array<{ name: string }> };
+    expect(data.ok).toBe(true);
+    expect(Array.isArray(data.encontrados)).toBe(true);
+    expect(data.encontrados?.some((s) => s.name === "Aceros")).toBe(true);
+  });
+});
+
 describe("v2.2: PATCH favorite y CSV", () => {
   it("PATCH { favorite: true } persiste en el directorio", async () => {
     const { deps, store } = fakeDeps([
@@ -452,7 +468,7 @@ describe("v2.2: PATCH favorite y CSV", () => {
     expect(store.current[0]?.favorite).toBe(true);
   });
 
-  it("el CSV incluye las columnas catalogPrice, address y favorite", async () => {
+  it("el CSV usa encabezados en español y el precio de catálogo como Precio", async () => {
     const { deps } = fakeDeps([
       {
         name: "X",
@@ -471,11 +487,75 @@ describe("v2.2: PATCH favorite y CSV", () => {
     const app = buildApi(deps);
     const res = await app.request("/api/directorio.csv");
     const text = await res.text();
-    expect(text.split("\n")[0]).toContain("catalogPrice");
-    expect(text.split("\n")[0]).toContain("address");
-    expect(text.split("\n")[0]).toContain("favorite");
+    const header = text.split("\n")[0];
+    expect(header).toContain("Dirección");
+    expect(header).toContain("Favorito");
+    expect(header).not.toContain("catalogPrice");
     expect(text).toContain("439.99");
     expect(text).toContain("Monterrey");
+  });
+});
+
+describe("v2.3: CSV resumido en español", () => {
+  it("exporta 12 encabezados en español y sin columnas internas", async () => {
+    const { deps } = fakeDeps([
+      {
+        name: "X",
+        material: "m",
+        region: "mx",
+        trusted: true,
+        contact: {},
+        status: "pendiente",
+        firstSeen: "2026-07-01T00:00:00.000Z",
+        lastSeen: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    const app = buildApi(deps);
+    const res = await app.request("/api/directorio.csv");
+    const header = (await res.text()).split("\n")[0];
+    expect(header).toBe(
+      "Proveedor,Sitio web,Material,Región,Precio,Moneda,Email,WhatsApp,Teléfono,Dirección,Estado,Favorito",
+    );
+    expect(header).not.toContain("firstSeen");
+    expect(header).not.toContain("notes");
+    expect(header).not.toContain("trusted");
+  });
+
+  it("Precio usa mayoreo si hay, si no catálogo; Favorito 'sí'; Moneda en su columna", async () => {
+    const { deps } = fakeDeps([
+      {
+        name: "Con mayoreo",
+        material: "m",
+        region: "mx",
+        trusted: true,
+        contact: { email: "a@a.mx", whatsapp: "+52 81 1234 5678" },
+        status: "contactado",
+        wholesalePrice: 180,
+        currency: "MXN",
+        favorite: true,
+        firstSeen: "2026-07-01T00:00:00.000Z",
+        lastSeen: "2026-07-01T00:00:00.000Z",
+      },
+      {
+        name: "Solo catálogo",
+        material: "m",
+        region: "mx",
+        trusted: true,
+        contact: {},
+        status: "pendiente",
+        catalogPrice: 439.99,
+        currency: "USD",
+        firstSeen: "2026-07-01T00:00:00.000Z",
+        lastSeen: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+    const app = buildApi(deps);
+    const lines = (await (await app.request("/api/directorio.csv")).text()).split("\n");
+    expect(lines[1]).toContain("180");
+    expect(lines[1]).toContain("MXN");
+    expect(lines[1]).toContain("sí");
+    expect(lines[2]).toContain("439.99");
+    expect(lines[2]).toContain("USD");
   });
 });
 

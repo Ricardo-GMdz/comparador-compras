@@ -6,9 +6,13 @@ const ESTADOS = ["pendiente", "contactado", "cotizó", "descartado"];
 // Estado de la vista: directorio completo + mejor opción de la última búsqueda.
 let directorio = [];
 let mejorOpcion = null;
+// Claves de los proveedores hallados en la última búsqueda (null = sin búsqueda aún).
+let resultadosKeys = null;
 // Proveedor activo en el modal de cotización y secuencia anti-carreras del fetch.
 let proveedorCotizacion = null;
 let cotizacionSeq = 0;
+// Vista activa del sidebar: "inicio" o "historial".
+let vistaActual = "inicio";
 
 // Wrapper de fetch a la API: ante 401 muestra la pantalla de clave y corta el flujo.
 async function apiFetch(url, opts) {
@@ -145,7 +149,7 @@ function accionesFor(s, key) {
     <button type="button" data-action="borrar" data-key="${esc(key)}">🗑</button>`;
 }
 
-function renderTable(suppliers) {
+function renderTable(suppliers, targetId = "tabla") {
   const rows = suppliers
     .map((s) => {
       const key = keyOf(s);
@@ -164,7 +168,7 @@ function renderTable(suppliers) {
     </tr>`;
     })
     .join("");
-  $("tabla").innerHTML =
+  $(targetId).innerHTML =
     suppliers.length === 0
       ? ""
       : `
@@ -201,10 +205,51 @@ function filtrados() {
   return ordenada;
 }
 
+// Pinta la sección de favoritos de Inicio (reusa la tabla; mensaje si no hay).
+function renderFavoritos() {
+  const favs = directorio.filter((s) => s.favorite === true);
+  if (favs.length === 0) {
+    $("favoritos").innerHTML = '<p class="vacio">Todavía no marcaste favoritos.</p>';
+    return;
+  }
+  renderTable(favs, "favoritos");
+}
+
+// Muestra en Inicio los proveedores de la última búsqueda (frescos desde el directorio).
+function renderResultados() {
+  if (!resultadosKeys) {
+    $("resultados-wrap").classList.add("hidden");
+    $("resultados").innerHTML = "";
+    return;
+  }
+  const items = directorio.filter((s) => resultadosKeys.has(keyOf(s)));
+  if (items.length === 0) {
+    $("resultados-wrap").classList.add("hidden");
+    $("resultados").innerHTML = "";
+    return;
+  }
+  $("resultados-wrap").classList.remove("hidden");
+  renderTable(items, "resultados");
+}
+
 function render() {
   $("total").textContent = `${directorio.length} en el directorio`;
   renderBest(mejorOpcion);
+  renderResultados();
+  renderFavoritos();
   renderTable(filtrados());
+}
+
+// Cambia entre las vistas del sidebar (Inicio / Historial) sin recargar.
+function mostrarVista(vista) {
+  if (vista === vistaActual) return;
+  vistaActual = vista;
+  $("vista-inicio").classList.toggle("hidden", vista !== "inicio");
+  $("vista-historial").classList.toggle("hidden", vista !== "historial");
+  document.querySelectorAll(".nav-item").forEach((boton) => {
+    boton.classList.toggle("active", boton.dataset.vista === vista);
+  });
+  render();
 }
 
 async function cargarDirectorio() {
@@ -424,6 +469,7 @@ $("buscar").addEventListener("submit", async (e) => {
     }
     directorio = data.suppliers;
     mejorOpcion = data.mejorOpcion;
+    resultadosKeys = new Set((data.encontrados ?? []).map(keyOf));
     render();
     $("status").textContent = `${data.nuevos} nuevos · ${data.total} en total`;
   } catch (e) {
@@ -436,6 +482,10 @@ $("filtro").addEventListener("input", render);
 $("filtroEstado").addEventListener("change", render);
 $("orden").addEventListener("change", render);
 $("soloFav").addEventListener("change", render);
+
+document.querySelectorAll(".nav-item").forEach((boton) => {
+  boton.addEventListener("click", () => mostrarVista(boton.dataset.vista));
+});
 
 $("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -480,15 +530,14 @@ $("publicar").addEventListener("click", async () => {
   }
 });
 
-// Delegación: cambios de estado por fila.
-$("tabla").addEventListener("change", (e) => {
+// Handlers de fila (se usan tanto en la tabla del Historial como en favoritos).
+function onFilaChange(e) {
   const select = e.target.closest(".estado-select");
   if (!select) return;
   patchProveedor(select.dataset.key, { status: select.value });
-});
+}
 
-// Delegación: notas y botones de acción por fila.
-$("tabla").addEventListener("click", (e) => {
+function onFilaClick(e) {
   const el = e.target.closest("[data-action]");
   if (!el) return;
   const key = el.dataset.key;
@@ -510,7 +559,14 @@ $("tabla").addEventListener("click", (e) => {
     e.preventDefault();
     abrirDetalle(supplier);
   }
-});
+}
+
+$("tabla").addEventListener("change", onFilaChange);
+$("tabla").addEventListener("click", onFilaClick);
+$("resultados").addEventListener("change", onFilaChange);
+$("resultados").addEventListener("click", onFilaClick);
+$("favoritos").addEventListener("change", onFilaChange);
+$("favoritos").addEventListener("click", onFilaClick);
 
 $("mCantidad").addEventListener("input", generarMensaje);
 $("mSpec").addEventListener("input", generarMensaje);
