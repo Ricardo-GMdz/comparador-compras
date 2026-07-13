@@ -427,6 +427,22 @@ describe("API", () => {
   });
 });
 
+describe("v2.3: /api/buscar devuelve los encontrados", () => {
+  it("incluye 'encontrados' con los proveedores hallados en esa búsqueda", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi(deps);
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "lámina", region: "mx" }),
+    });
+    const data = (await res.json()) as { ok: boolean; encontrados?: Array<{ name: string }> };
+    expect(data.ok).toBe(true);
+    expect(Array.isArray(data.encontrados)).toBe(true);
+    expect(data.encontrados?.some((s) => s.name === "Aceros")).toBe(true);
+  });
+});
+
 describe("v2.2: PATCH favorite y CSV", () => {
   it("PATCH { favorite: true } persiste en el directorio", async () => {
     const { deps, store } = fakeDeps([

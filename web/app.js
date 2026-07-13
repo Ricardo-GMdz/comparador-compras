@@ -6,6 +6,8 @@ const ESTADOS = ["pendiente", "contactado", "cotizó", "descartado"];
 // Estado de la vista: directorio completo + mejor opción de la última búsqueda.
 let directorio = [];
 let mejorOpcion = null;
+// Claves de los proveedores hallados en la última búsqueda (null = sin búsqueda aún).
+let resultadosKeys = null;
 // Proveedor activo en el modal de cotización y secuencia anti-carreras del fetch.
 let proveedorCotizacion = null;
 let cotizacionSeq = 0;
@@ -213,9 +215,27 @@ function renderFavoritos() {
   renderTable(favs, "favoritos");
 }
 
+// Muestra en Inicio los proveedores de la última búsqueda (frescos desde el directorio).
+function renderResultados() {
+  if (!resultadosKeys) {
+    $("resultados-wrap").classList.add("hidden");
+    $("resultados").innerHTML = "";
+    return;
+  }
+  const items = directorio.filter((s) => resultadosKeys.has(keyOf(s)));
+  if (items.length === 0) {
+    $("resultados-wrap").classList.add("hidden");
+    $("resultados").innerHTML = "";
+    return;
+  }
+  $("resultados-wrap").classList.remove("hidden");
+  renderTable(items, "resultados");
+}
+
 function render() {
   $("total").textContent = `${directorio.length} en el directorio`;
   renderBest(mejorOpcion);
+  renderResultados();
   renderFavoritos();
   renderTable(filtrados());
 }
@@ -449,6 +469,7 @@ $("buscar").addEventListener("submit", async (e) => {
     }
     directorio = data.suppliers;
     mejorOpcion = data.mejorOpcion;
+    resultadosKeys = new Set((data.encontrados ?? []).map(keyOf));
     render();
     $("status").textContent = `${data.nuevos} nuevos · ${data.total} en total`;
   } catch (e) {
@@ -542,6 +563,8 @@ function onFilaClick(e) {
 
 $("tabla").addEventListener("change", onFilaChange);
 $("tabla").addEventListener("click", onFilaClick);
+$("resultados").addEventListener("change", onFilaChange);
+$("resultados").addEventListener("click", onFilaClick);
 $("favoritos").addEventListener("change", onFilaChange);
 $("favoritos").addEventListener("click", onFilaClick);
 

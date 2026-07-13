@@ -204,6 +204,7 @@ export function buildApi(deps: ApiDeps): Hono {
         ok: true,
         suppliers: rankSuppliers(suppliers, region),
         mejorOpcion: selectBestSupplier(foundSuppliers, region) ?? null,
+        encontrados: foundSuppliers,
         nuevos: added,
         total: suppliers.length,
       });
