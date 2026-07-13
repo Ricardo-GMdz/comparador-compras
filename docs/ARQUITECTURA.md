@@ -76,8 +76,9 @@ suma `catalogPrice`, `address`, `favorite`; el directorio público suma
 
 ### v2.3 — navegación con sidebar y CSV resumido
 
-El frontend se reorganiza con un **sidebar**: **Inicio** (el buscador + un
-vistazo a los favoritos) e **Historial** (el directorio completo con
+El frontend se reorganiza con un **sidebar**: **Inicio** (el buscador, los
+resultados de la última búsqueda y un vistazo a los favoritos) e **Historial**
+(el directorio completo con
 filtro/orden/estados/acciones/CSV/Publicar). Es navegación client-side pura
 (`mostrarVista` togglea `#vista-inicio`/`#vista-historial`, sin router); el
 estado en memoria se comparte y la sección de favoritos reusa `renderTable`
