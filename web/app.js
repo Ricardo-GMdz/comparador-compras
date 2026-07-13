@@ -174,7 +174,7 @@ function renderTable(suppliers, targetId = "tabla") {
       <td class="contacts">${contactFor(s)}</td>
       <td><span class="chip ${s.trusted ? "chip-green" : "chip-amber"}">${s.trusted ? "Confiable" : "Sin verificar"}</span></td>
       <td>${estadoSelect(s, key)}</td>
-      <td class="notas" data-action="notas" data-key="${esc(key)}" title="Click para editar">${s.notes ? esc(s.notes) : "＋ nota"}</td>
+      <td class="notas" data-action="notas" data-key="${esc(key)}" title="${s.notes ? esc(s.notes) : "Click para editar"}">${s.notes ? `<span class="notas-txt">${esc(s.notes)}</span>` : "＋ nota"}</td>
       <td class="acciones">${accionesFor(s, key)}</td>
     </tr>`;
     })
