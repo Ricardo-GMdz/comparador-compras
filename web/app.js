@@ -9,6 +9,8 @@ let mejorOpcion = null;
 // Proveedor activo en el modal de cotización y secuencia anti-carreras del fetch.
 let proveedorCotizacion = null;
 let cotizacionSeq = 0;
+// Vista activa del sidebar: "inicio" o "historial".
+let vistaActual = "inicio";
 
 // Wrapper de fetch a la API: ante 401 muestra la pantalla de clave y corta el flujo.
 async function apiFetch(url, opts) {
@@ -205,6 +207,18 @@ function render() {
   $("total").textContent = `${directorio.length} en el directorio`;
   renderBest(mejorOpcion);
   renderTable(filtrados());
+}
+
+// Cambia entre las vistas del sidebar (Inicio / Historial) sin recargar.
+function mostrarVista(vista) {
+  if (vista === vistaActual) return;
+  vistaActual = vista;
+  $("vista-inicio").classList.toggle("hidden", vista !== "inicio");
+  $("vista-historial").classList.toggle("hidden", vista !== "historial");
+  document.querySelectorAll(".nav-item").forEach((boton) => {
+    boton.classList.toggle("active", boton.dataset.vista === vista);
+  });
+  render();
 }
 
 async function cargarDirectorio() {
@@ -436,6 +450,10 @@ $("filtro").addEventListener("input", render);
 $("filtroEstado").addEventListener("change", render);
 $("orden").addEventListener("change", render);
 $("soloFav").addEventListener("change", render);
+
+document.querySelectorAll(".nav-item").forEach((boton) => {
+  boton.addEventListener("click", () => mostrarVista(boton.dataset.vista));
+});
 
 $("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
