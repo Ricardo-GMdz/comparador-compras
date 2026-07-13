@@ -130,9 +130,9 @@ body {
 .wrap {
   flex: 1;
   min-width: 0;
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 30px 28px 60px;
+  width: 100%;
+  max-width: 1600px;
+  padding: 26px 36px 56px;
 }
 
 /* ---------- Topbar ---------- */
@@ -168,6 +168,10 @@ body {
 }
 
 /* ---------- Buscador (la consulta, protagonista de Inicio) ---------- */
+/* Inicio: columna enfocada (buscador + placa + favoritos alineados) */
+#vista-inicio {
+  max-width: 1120px;
+}
 .search {
   display: flex;
   gap: 10px;
@@ -332,7 +336,7 @@ body {
 }
 table {
   width: 100%;
-  min-width: 860px;
+  min-width: 720px;
   border-collapse: collapse;
   background: var(--card);
   border: 1px solid var(--line);
@@ -452,10 +456,18 @@ select.input {
   cursor: pointer;
   color: var(--muted);
   font-size: 12px;
-  max-width: 150px;
+  width: 260px;
 }
 .notas:hover {
   color: var(--brass-deep);
+}
+/* Notas: acotadas a 3 líneas para filas uniformes (el detalle muestra todo) */
+.notas-txt {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .acciones {
   white-space: nowrap;
