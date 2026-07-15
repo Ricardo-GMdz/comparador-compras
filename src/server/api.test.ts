@@ -634,3 +634,22 @@ describe("API — auth y público", () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe("API — healthcheck público", () => {
+  it("GET /api/health responde 200 { ok:true, status:'ok' } sin clave (aun con auth)", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi({ ...deps, auth: { accessKey: "secreta", now: () => 5_000_000 } });
+    const res = await app.request("/api/health");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok?: boolean; status?: string };
+    expect(body.ok).toBe(true);
+    expect(body.status).toBe("ok");
+  });
+
+  it("no depende del directorio (no llama loadDirectory)", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi(deps);
+    await app.request("/api/health");
+    expect(deps.loadDirectory).not.toHaveBeenCalled();
+  });
+});
