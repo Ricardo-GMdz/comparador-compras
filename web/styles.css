@@ -153,6 +153,7 @@ body {
   letter-spacing: 0.04em;
   padding: 4px 10px;
   border-radius: 999px;
+  white-space: nowrap;
 }
 .chip-indigo {
   background: rgba(26, 29, 33, 0.07);
