@@ -18,7 +18,7 @@ const VERCEL_SEARCH_BUDGET: SearchBudget = {
   maxWebSearchUses: 2,
   maxEmptyRetries: 0,
   maxTokens: 8000,
-  thinkingBudgetTokens: 2000,
+  effort: "low",
 };
 
 const env = loadVercelEnv();
