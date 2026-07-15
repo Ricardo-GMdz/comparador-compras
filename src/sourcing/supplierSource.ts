@@ -30,8 +30,12 @@ export interface SearchBudget {
   maxWebSearchUses: number;
   maxEmptyRetries: number;
   maxTokens: number;
-  /** Si está presente, thinking pasa a "enabled" con este budget; si no, "adaptive". */
-  thinkingBudgetTokens?: number;
+  /**
+   * Nivel de esfuerzo de razonamiento (`output_config.effort`). El modelo
+   * (opus 4.8) usa thinking "adaptive" + effort para controlar cuánto piensa;
+   * NO soporta thinking "enabled" con budget. Si se omite, no se acota el effort.
+   */
+  effort?: "low" | "medium" | "high";
 }
 
 /** Dependencias: el cliente Anthropic (inyectable para tests). */
@@ -171,16 +175,15 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
   const maxWebSearchUses = deps.searchBudget?.maxWebSearchUses ?? MAX_WEB_SEARCH_USES;
   const maxEmptyRetries = deps.searchBudget?.maxEmptyRetries ?? MAX_EMPTY_RETRIES;
   const maxTokens = deps.searchBudget?.maxTokens ?? MAX_TOKENS;
-  const thinking =
-    deps.searchBudget?.thinkingBudgetTokens !== undefined
-      ? ({ type: "enabled", budget_tokens: deps.searchBudget.thinkingBudgetTokens } as const)
-      : ({ type: "adaptive" } as const);
+  const effort = deps.searchBudget?.effort;
 
   async function searchOnce(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
     const response = await deps.client.messages.create({
       model: MODEL,
       max_tokens: maxTokens,
-      thinking,
+      // Este modelo usa thinking "adaptive"; el esfuerzo se acota con output_config.effort.
+      thinking: { type: "adaptive" },
+      ...(effort !== undefined ? { output_config: { effort } } : {}),
       system: buildSystemPrompt(),
       tools: [
         { type: WEB_SEARCH_TOOL_TYPE, name: WEB_SEARCH_TOOL_NAME, max_uses: maxWebSearchUses },

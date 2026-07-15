@@ -165,9 +165,14 @@ describe("createSupplierSource — searchBudget", () => {
   const emptyJson = JSON.stringify({ suppliers: [] });
 
   // Forma mínima de los argumentos de messages.create que asertamos.
-  type CreateArgs = { max_tokens: number; thinking: unknown; tools: { max_uses: number }[] };
+  type CreateArgs = {
+    max_tokens: number;
+    thinking: unknown;
+    output_config?: unknown;
+    tools: { max_uses: number }[];
+  };
 
-  it("sin searchBudget usa los defaults (adaptive, 5 usos, 1 reintento)", async () => {
+  it("sin searchBudget usa los defaults (adaptive sin effort, 5 usos, 1 reintento)", async () => {
     const { client, create } = fakeClientSequence([emptyJson]);
     const source = createSupplierSource({ client });
     await source.search({ query: "láminas", region: "mx" });
@@ -175,10 +180,11 @@ describe("createSupplierSource — searchBudget", () => {
     expect(create).toHaveBeenCalledTimes(2);
     const args = create.mock.calls[0]?.[0] as CreateArgs;
     expect(args.thinking).toEqual({ type: "adaptive" });
+    expect(args.output_config).toBeUndefined();
     expect(args.tools[0]?.max_uses).toBe(5);
   });
 
-  it("con searchBudget acota usos/thinking y NO reintenta si maxEmptyRetries=0", async () => {
+  it("con searchBudget usa thinking adaptive + output_config.effort y NO reintenta si maxEmptyRetries=0", async () => {
     const { client, create } = fakeClientSequence([emptyJson]);
     const source = createSupplierSource({
       client,
@@ -186,14 +192,16 @@ describe("createSupplierSource — searchBudget", () => {
         maxWebSearchUses: 2,
         maxEmptyRetries: 0,
         maxTokens: 8000,
-        thinkingBudgetTokens: 2000,
+        effort: "low",
       },
     });
     await source.search({ query: "láminas", region: "mx" });
     // maxEmptyRetries=0 → una sola llamada aunque venga vacío.
     expect(create).toHaveBeenCalledTimes(1);
     const args = create.mock.calls[0]?.[0] as CreateArgs;
-    expect(args.thinking).toEqual({ type: "enabled", budget_tokens: 2000 });
+    // El modelo (opus 4.8) NO soporta thinking "enabled": adaptive + effort.
+    expect(args.thinking).toEqual({ type: "adaptive" });
+    expect(args.output_config).toEqual({ effort: "low" });
     expect(args.max_tokens).toBe(8000);
     expect(args.tools[0]?.max_uses).toBe(2);
   });
