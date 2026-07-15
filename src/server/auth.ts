@@ -6,8 +6,12 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 /** Nombre de la cookie de sesión. */
 export const COOKIE_NAME = "cc_auth";
 
-/** Rutas que NO exige clave (login y directorio público). */
-export const PUBLIC_PATHS: ReadonlySet<string> = new Set(["/api/login", "/api/publico"]);
+/** Rutas que NO exige clave (login, directorio público y healthcheck). */
+export const PUBLIC_PATHS: ReadonlySet<string> = new Set([
+  "/api/login",
+  "/api/publico",
+  "/api/health",
+]);
 
 /** Compara dos strings en tiempo constante (hashea a largo fijo antes). */
 export function hashEqual(a: string, b: string): boolean {

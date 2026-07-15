@@ -175,6 +175,10 @@ export function buildApi(deps: ApiDeps): Hono {
     });
   });
 
+  // Healthcheck público (sin clave): liveness simple, no toca el directorio ni
+  // dependencias externas. Para monitoreo/uptime.
+  app.get("/api/health", (c) => c.json({ ok: true, status: "ok" }));
+
   // Directorio público (sin clave): la landing lo consume. CORS abierto a propósito.
   app.get("/api/publico", async (c) => {
     const publicSuppliers = await deps.loadPublicDirectory();
