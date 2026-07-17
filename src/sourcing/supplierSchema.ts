@@ -71,6 +71,7 @@ const rawContactSchema = z.object({
   formUrl: z.string().optional(),
 });
 
+// Si cambian campos/enums acá, actualizar SUPPLIERS_OUTPUT_FORMAT en supplierSource.ts.
 const rawSupplierSchema = z.object({
   name: z.string().min(1),
   website: z.string().optional(),
