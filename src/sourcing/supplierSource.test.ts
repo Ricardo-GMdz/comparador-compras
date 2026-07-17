@@ -288,10 +288,7 @@ describe("createSupplierSource — searchBudget", () => {
     expect(create).toHaveBeenCalledTimes(3);
     const args = create.mock.calls[0]?.[0] as CreateArgs;
     expect(args.thinking).toEqual({ type: "adaptive" });
-    expect((args.output_config as { effort?: string } | undefined)?.effort).toBeUndefined();
-    expect((args.output_config as { format?: { type: string } } | undefined)?.format?.type).toBe(
-      "json_schema",
-    );
+    expect(args.output_config).toBeUndefined();
     expect(args.tools[0]?.max_uses).toBe(5);
   });
 
@@ -308,24 +305,10 @@ describe("createSupplierSource — searchBudget", () => {
       const args = call[0] as CreateArgs;
       // El modelo (opus 4.8) NO soporta thinking "enabled": adaptive + effort.
       expect(args.thinking).toEqual({ type: "adaptive" });
-      const outputConfig = args.output_config as
-        { effort?: string; format?: { type: string } } | undefined;
-      expect(outputConfig?.effort).toBe("low");
-      expect(outputConfig?.format?.type).toBe("json_schema");
+      expect(args.output_config).toEqual({ effort: "low" });
       expect(args.max_tokens).toBe(8000);
       expect(args.tools[0]?.max_uses).toBe(2);
     }
-  });
-
-  it("la búsqueda fuerza el schema de suppliers con output_config.format", async () => {
-    const { client, create } = fakeClientSequence([emptyJson]);
-    const source = createSupplierSource({ client });
-
-    await source.search({ query: "x", region: "mx" });
-
-    type Args = { output_config?: { format?: { type: string } } };
-    const args = create.mock.calls[0]?.[0] as Args;
-    expect(args.output_config?.format?.type).toBe("json_schema");
   });
 });
 
