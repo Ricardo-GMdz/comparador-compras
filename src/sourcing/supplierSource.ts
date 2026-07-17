@@ -20,6 +20,51 @@ const WEB_FETCH_TOOL_NAME = "web_fetch";
 const MAX_WEB_FETCH_USES = 3;
 const MAX_ENRICH_SEARCH_USES = 2;
 
+// Schema JSON forzado de la respuesta (espejo de supplierSchema). El parseo
+// defensivo con zod queda como red de seguridad aunque el formato sea forzado.
+const SUPPLIERS_OUTPUT_FORMAT = {
+  type: "json_schema",
+  schema: {
+    type: "object",
+    properties: {
+      suppliers: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            website: { type: "string" },
+            material: { type: "string" },
+            wholesalePrice: { type: "number" },
+            currency: { type: "string" },
+            moq: { type: "number" },
+            priceUnit: { type: "string", enum: ["pieza", "kg", "tonelada", "m2"] },
+            availability: { type: "string", enum: ["disponible", "sobre pedido"] },
+            catalogPrice: { type: "number" },
+            address: { type: "string" },
+            contact: {
+              type: "object",
+              properties: {
+                email: { type: "string" },
+                phone: { type: "string" },
+                whatsapp: { type: "string" },
+                formUrl: { type: "string" },
+              },
+              additionalProperties: false,
+            },
+            trusted: { type: "boolean" },
+            notes: { type: "string" },
+          },
+          required: ["name", "material"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["suppliers"],
+    additionalProperties: false,
+  },
+} as const;
+
 /**
  * Variantes fijas de la búsqueda para el fan-out (sin gastar tokens en
  * generarlas). La primera es SIEMPRE la query tal cual la escribió el usuario.
@@ -204,7 +249,11 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
       max_tokens: maxTokens,
       // Este modelo usa thinking "adaptive"; el esfuerzo se acota con output_config.effort.
       thinking: { type: "adaptive" },
-      ...(effort !== undefined ? { output_config: { effort } } : {}),
+      // El formato forzado garantiza el JSON; effort solo si el budget lo acota.
+      output_config: {
+        format: SUPPLIERS_OUTPUT_FORMAT,
+        ...(effort !== undefined ? { effort } : {}),
+      },
       system: buildSystemPrompt(),
       tools: [
         { type: WEB_SEARCH_TOOL_TYPE, name: WEB_SEARCH_TOOL_NAME, max_uses: maxWebSearchUses },
