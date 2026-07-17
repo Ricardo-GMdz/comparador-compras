@@ -67,9 +67,7 @@ describe("createSupplierSource", () => {
     const EMPTY = JSON.stringify({ suppliers: [] });
     // Otro proveedor (web distinta → supplierKey distinto al de RESPONSE).
     const OTHER_RESPONSE = JSON.stringify({
-      suppliers: [
-        { name: "Ferretera MTY", website: "https://ferretera.mx", material: "lámina" },
-      ],
+      suppliers: [{ name: "Ferretera MTY", website: "https://ferretera.mx", material: "lámina" }],
     });
 
     it("dispara una llamada por variante y cada prompt lleva su variante", async () => {
@@ -291,9 +289,9 @@ describe("createSupplierSource — searchBudget", () => {
     const args = create.mock.calls[0]?.[0] as CreateArgs;
     expect(args.thinking).toEqual({ type: "adaptive" });
     expect((args.output_config as { effort?: string } | undefined)?.effort).toBeUndefined();
-    expect(
-      (args.output_config as { format?: { type: string } } | undefined)?.format?.type,
-    ).toBe("json_schema");
+    expect((args.output_config as { format?: { type: string } } | undefined)?.format?.type).toBe(
+      "json_schema",
+    );
     expect(args.tools[0]?.max_uses).toBe(5);
   });
 
@@ -311,8 +309,7 @@ describe("createSupplierSource — searchBudget", () => {
       // El modelo (opus 4.8) NO soporta thinking "enabled": adaptive + effort.
       expect(args.thinking).toEqual({ type: "adaptive" });
       const outputConfig = args.output_config as
-        | { effort?: string; format?: { type: string } }
-        | undefined;
+        { effort?: string; format?: { type: string } } | undefined;
       expect(outputConfig?.effort).toBe("low");
       expect(outputConfig?.format?.type).toBe("json_schema");
       expect(args.max_tokens).toBe(8000);
