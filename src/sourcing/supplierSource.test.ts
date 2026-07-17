@@ -135,6 +135,28 @@ describe("createSupplierSource", () => {
       await expect(source.search({ query: "x", region: "mx" })).rejects.toThrow("boom");
     });
 
+    it("devuelve [] cuando todas las variantes vienen vacías", async () => {
+      const { client } = fakeClientOutcomes([{ text: EMPTY }, { text: EMPTY }, { text: EMPTY }]);
+      const source = createSupplierSource({ client });
+
+      const result = await source.search({ query: "x", region: "mx" });
+
+      expect(result).toEqual([]);
+    });
+
+    it("con maxVariants: 0 no llama al modelo y devuelve []", async () => {
+      const { client, create } = fakeClientOutcomes([{ text: RESPONSE }]);
+      const source = createSupplierSource({
+        client,
+        searchBudget: { maxWebSearchUses: 2, maxTokens: 8000, maxVariants: 0 },
+      });
+
+      const result = await source.search({ query: "lámina", region: "mx" });
+
+      expect(create).not.toHaveBeenCalled();
+      expect(result).toEqual([]);
+    });
+
     it("con maxVariants: 1 hace una sola llamada (comportamiento anterior)", async () => {
       const { client, create } = fakeClientOutcomes([{ text: RESPONSE }]);
       const source = createSupplierSource({

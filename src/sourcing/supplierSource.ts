@@ -232,7 +232,7 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
         reason: failure.reason instanceof Error ? failure.reason.message : String(failure.reason),
       });
     }
-    if (failures.length === settled.length) {
+    if (settled.length > 0 && failures.length === settled.length) {
       const reason = failures[0]?.reason;
       throw reason instanceof Error ? reason : new Error(String(reason));
     }
@@ -244,8 +244,9 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
         continue;
       }
       for (const candidate of result.value) {
-        if (!byKey.has(supplierKey(candidate))) {
-          byKey.set(supplierKey(candidate), candidate);
+        const key = supplierKey(candidate);
+        if (!byKey.has(key)) {
+          byKey.set(key, candidate);
         }
       }
     }
