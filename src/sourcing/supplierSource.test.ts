@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createSupplierSource } from "./supplierSource.js";
+import { createSupplierSource, buildQueryVariants } from "./supplierSource.js";
 import type { Supplier } from "../domain/supplier.js";
 
 // Cliente Anthropic mínimo mockeado: solo messages.create.
@@ -204,5 +204,22 @@ describe("createSupplierSource — searchBudget", () => {
     expect(args.output_config).toEqual({ effort: "low" });
     expect(args.max_tokens).toBe(8000);
     expect(args.tools[0]?.max_uses).toBe(2);
+  });
+});
+
+describe("buildQueryVariants", () => {
+  it("genera 3 variantes fijas con la query original primero", () => {
+    // Arrange
+    const query = "dinamómetro Extech 475040";
+
+    // Act
+    const variants = buildQueryVariants(query);
+
+    // Assert: plantillas fijas del spec, la original SIEMPRE primera.
+    expect(variants).toEqual([
+      "dinamómetro Extech 475040",
+      "distribuidor mayorista de dinamómetro Extech 475040 en México",
+      "proveedores de dinamómetro Extech 475040 al por mayor",
+    ]);
   });
 });

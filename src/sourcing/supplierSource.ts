@@ -19,6 +19,18 @@ const WEB_FETCH_TOOL_NAME = "web_fetch";
 const MAX_WEB_FETCH_USES = 3;
 const MAX_ENRICH_SEARCH_USES = 2;
 
+/**
+ * Variantes fijas de la búsqueda para el fan-out (sin gastar tokens en
+ * generarlas). La primera es SIEMPRE la query tal cual la escribió el usuario.
+ */
+export function buildQueryVariants(query: string): readonly string[] {
+  return [
+    query,
+    `distribuidor mayorista de ${query} en México`,
+    `proveedores de ${query} al por mayor`,
+  ];
+}
+
 /** Consulta a la que responde una fuente de proveedores. */
 export interface SupplierQuery {
   query: string;
