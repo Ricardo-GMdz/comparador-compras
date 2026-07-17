@@ -90,6 +90,13 @@ function buildSystemPrompt(): string {
     "Si el proveedor publica un precio de lista/catálogo (aunque no sea de mayoreo),",
     'reportalo en "catalogPrice" con su "currency". Si publica su dirección/ciudad,',
     'ponela en "address". No inventes ninguno de los dos: omitilos si no están.',
+    'REGLA DE CAMPOS: NUNCA dejes un precio o una dirección solo en "notes".',
+    'Todo precio hallado va en "wholesalePrice" (si es de volumen/mayoreo) o en',
+    '"catalogPrice" (si es de lista/catálogo), siempre con su "currency"; toda',
+    'dirección o ciudad va en "address". "notes" es solo para contexto extra.',
+    'Incorrecto: { "name": "X", "notes": "precio de lista $439.99, en Monterrey" }.',
+    'Correcto: { "name": "X", "catalogPrice": 439.99, "currency": "USD",',
+    '  "address": "Monterrey, NL", "notes": "precio publicado en su catálogo" }.',
     'Marcá "trusted": true solo para empresas reconocidas/verificables (con datos de contacto reales).',
     'Priorizá precio y datos de contacto. Si no encontrás, devolvé { "suppliers": [] }.',
   ].join("\n");

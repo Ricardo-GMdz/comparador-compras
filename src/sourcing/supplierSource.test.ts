@@ -171,6 +171,21 @@ describe("createSupplierSource", () => {
     });
   });
 
+  it("el system prompt exige volcar precios y dirección a campos estructurados, no a notes", async () => {
+    // Arrange
+    const { client, create } = fakeClientSequence([RESPONSE]);
+    const source = createSupplierSource({ client });
+
+    // Act
+    await source.search({ query: "x", region: "mx" });
+
+    // Assert: la regla y el mini-ejemplo correcto/incorrecto están en el prompt.
+    const call = create.mock.calls[0]?.[0] as { system: string };
+    expect(call.system).toContain('NUNCA dejes un precio o una dirección solo en "notes"');
+    expect(call.system).toContain("Incorrecto:");
+    expect(call.system).toContain("Correcto:");
+  });
+
   describe("enrichContact", () => {
     const NOW = "2026-07-01T00:00:00.000Z";
 
