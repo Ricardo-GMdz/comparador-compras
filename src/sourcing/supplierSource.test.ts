@@ -171,6 +171,21 @@ describe("createSupplierSource", () => {
     });
   });
 
+  it("con localidad, el user prompt manda la ciudad a 'address', no a 'notes'", async () => {
+    // Arrange
+    const { client, create } = fakeClientSequence([RESPONSE]);
+    const source = createSupplierSource({ client, localidad: "San Nicolás de los Garza, NL" });
+
+    // Act
+    await source.search({ query: "x", region: "mx" });
+
+    // Assert: coherente con la REGLA DE CAMPOS del system prompt.
+    const call = create.mock.calls[0]?.[0] as { messages: { content: string }[] };
+    const userPrompt = call.messages[0]?.content ?? "";
+    expect(userPrompt).toContain("Indicá la ciudad del proveedor en 'address' si la conocés.");
+    expect(userPrompt).not.toContain("'notes' si la conocés");
+  });
+
   it("el system prompt exige volcar precios y dirección a campos estructurados, no a notes", async () => {
     // Arrange
     const { client, create } = fakeClientSequence([RESPONSE]);

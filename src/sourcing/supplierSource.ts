@@ -110,7 +110,7 @@ function buildUserPrompt(q: SupplierQuery, localidad?: string): string {
   if (localidad !== undefined && localidad.trim().length > 0) {
     lineas.push(
       `PRIORIDAD 1: proveedores locales de ${localidad.trim()} o su zona metropolitana;`,
-      "después el resto de la región. Indicá la ciudad del proveedor en 'notes' si la conocés.",
+      "después el resto de la región. Indicá la ciudad del proveedor en 'address' si la conocés.",
     );
   }
   lineas.push(
