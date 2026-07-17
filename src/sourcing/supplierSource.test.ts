@@ -3,18 +3,28 @@ import { createSupplierSource, buildQueryVariants } from "./supplierSource.js";
 import type { Supplier } from "../domain/supplier.js";
 
 // Cliente Anthropic mínimo mockeado: solo messages.create.
-// Devuelve los textos en orden (uno por llamada); repite el último si se agotan.
-function fakeClientSequence(texts: readonly string[]) {
+// Un resultado por llamada, en orden: texto de respuesta o rechazo (error).
+// Repite el último resultado si se agotan.
+type FakeOutcome = { text: string } | { reject: string };
+
+function fakeClientOutcomes(outcomes: readonly FakeOutcome[]) {
   let call = 0;
   const create = vi.fn(async (_params: unknown) => {
-    const text = texts[Math.min(call, texts.length - 1)] ?? "";
+    const outcome = outcomes[Math.min(call, outcomes.length - 1)] ?? { text: "" };
     call += 1;
+    if ("reject" in outcome) {
+      throw new Error(outcome.reject);
+    }
     return {
       stop_reason: "end_turn",
-      content: [{ type: "text", text }],
+      content: [{ type: "text", text: outcome.text }],
     };
   });
   return { client: { messages: { create } } as never, create };
+}
+
+function fakeClientSequence(texts: readonly string[]) {
+  return fakeClientOutcomes(texts.map((text) => ({ text })));
 }
 
 function fakeClient(text: string) {
@@ -53,36 +63,84 @@ describe("createSupplierSource", () => {
     expect(result).toEqual([]);
   });
 
-  describe("reintento si la búsqueda viene vacía", () => {
+  describe("fan-out de variantes", () => {
     const EMPTY = JSON.stringify({ suppliers: [] });
+    // Otro proveedor (web distinta → supplierKey distinto al de RESPONSE).
+    const OTHER_RESPONSE = JSON.stringify({
+      suppliers: [
+        { name: "Ferretera MTY", website: "https://ferretera.mx", material: "lámina" },
+      ],
+    });
 
-    it("reintenta una vez cuando la primera búsqueda devuelve 0 proveedores", async () => {
-      // Arrange: primera vacía, segunda con resultados
-      const { client, create } = fakeClientSequence([EMPTY, RESPONSE]);
+    it("dispara una llamada por variante y cada prompt lleva su variante", async () => {
+      // Arrange
+      const { client, create } = fakeClientOutcomes([
+        { text: RESPONSE },
+        { text: EMPTY },
+        { text: EMPTY },
+      ]);
+      const source = createSupplierSource({ client });
+
+      // Act
+      await source.search({ query: "lámina galvanizada", region: "mx" });
+
+      // Assert: 3 llamadas (default) y los prompts interpolan cada variante.
+      expect(create).toHaveBeenCalledTimes(3);
+      type Call = { messages: { content: string }[] };
+      const prompts = create.mock.calls.map((c) => (c[0] as Call).messages[0]?.content ?? "");
+      expect(prompts[0]).toContain('"lámina galvanizada"');
+      expect(prompts[1]).toContain('"distribuidor mayorista de lámina galvanizada en México"');
+      expect(prompts[2]).toContain('"proveedores de lámina galvanizada al por mayor"');
+    });
+
+    it("combina los resultados y deduplica por supplierKey (el primero gana)", async () => {
+      // Arrange: variantes 1 y 2 devuelven el MISMO proveedor (misma web); la 3, otro.
+      const { client } = fakeClientOutcomes([
+        { text: RESPONSE },
+        { text: RESPONSE },
+        { text: OTHER_RESPONSE },
+      ]);
       const source = createSupplierSource({ client });
 
       // Act
       const result = await source.search({ query: "lámina", region: "mx" });
 
-      // Assert
-      expect(create).toHaveBeenCalledTimes(2);
+      // Assert: 2 únicos, sin duplicar Aceros del Norte.
+      expect(result).toHaveLength(2);
+      expect(result.map((s) => s.name).sort()).toEqual(["Aceros del Norte", "Ferretera MTY"]);
+    });
+
+    it("una variante que falla no tumba el resultado (se usan las otras)", async () => {
+      const { client } = fakeClientOutcomes([
+        { reject: "boom" },
+        { text: RESPONSE },
+        { text: EMPTY },
+      ]);
+      const source = createSupplierSource({ client });
+
+      const result = await source.search({ query: "lámina", region: "mx" });
+
       expect(result).toHaveLength(1);
       expect(result[0]?.name).toBe("Aceros del Norte");
     });
 
-    it("devuelve [] con exactamente 2 llamadas cuando ambas búsquedas vienen vacías", async () => {
-      const { client, create } = fakeClientSequence([EMPTY, EMPTY]);
+    it("propaga un error cuando TODAS las variantes fallan", async () => {
+      const { client } = fakeClientOutcomes([
+        { reject: "boom" },
+        { reject: "boom" },
+        { reject: "boom" },
+      ]);
       const source = createSupplierSource({ client });
 
-      const result = await source.search({ query: "x", region: "mx" });
-
-      expect(create).toHaveBeenCalledTimes(2);
-      expect(result).toEqual([]);
+      await expect(source.search({ query: "x", region: "mx" })).rejects.toThrow("boom");
     });
 
-    it("hace una sola llamada cuando la primera búsqueda trae resultados", async () => {
-      const { client, create } = fakeClientSequence([RESPONSE]);
-      const source = createSupplierSource({ client });
+    it("con maxVariants: 1 hace una sola llamada (comportamiento anterior)", async () => {
+      const { client, create } = fakeClientOutcomes([{ text: RESPONSE }]);
+      const source = createSupplierSource({
+        client,
+        searchBudget: { maxWebSearchUses: 2, maxTokens: 8000, maxVariants: 1 },
+      });
 
       const result = await source.search({ query: "lámina", region: "mx" });
 
@@ -172,38 +230,35 @@ describe("createSupplierSource — searchBudget", () => {
     tools: { max_uses: number }[];
   };
 
-  it("sin searchBudget usa los defaults (adaptive sin effort, 5 usos, 1 reintento)", async () => {
+  it("sin searchBudget usa los defaults (adaptive sin effort, 5 usos, 3 variantes)", async () => {
     const { client, create } = fakeClientSequence([emptyJson]);
     const source = createSupplierSource({ client });
     await source.search({ query: "láminas", region: "mx" });
-    // Vacío + default → reintenta: 2 llamadas.
-    expect(create).toHaveBeenCalledTimes(2);
+    // Default de fan-out: 3 variantes → 3 llamadas.
+    expect(create).toHaveBeenCalledTimes(3);
     const args = create.mock.calls[0]?.[0] as CreateArgs;
     expect(args.thinking).toEqual({ type: "adaptive" });
     expect(args.output_config).toBeUndefined();
     expect(args.tools[0]?.max_uses).toBe(5);
   });
 
-  it("con searchBudget usa thinking adaptive + output_config.effort y NO reintenta si maxEmptyRetries=0", async () => {
+  it("el budget (effort/maxTokens/maxWebSearchUses) se aplica a CADA llamada del fan-out", async () => {
     const { client, create } = fakeClientSequence([emptyJson]);
     const source = createSupplierSource({
       client,
-      searchBudget: {
-        maxWebSearchUses: 2,
-        maxEmptyRetries: 0,
-        maxTokens: 8000,
-        effort: "low",
-      },
+      searchBudget: { maxWebSearchUses: 2, maxTokens: 8000, effort: "low" },
     });
     await source.search({ query: "láminas", region: "mx" });
-    // maxEmptyRetries=0 → una sola llamada aunque venga vacío.
-    expect(create).toHaveBeenCalledTimes(1);
-    const args = create.mock.calls[0]?.[0] as CreateArgs;
-    // El modelo (opus 4.8) NO soporta thinking "enabled": adaptive + effort.
-    expect(args.thinking).toEqual({ type: "adaptive" });
-    expect(args.output_config).toEqual({ effort: "low" });
-    expect(args.max_tokens).toBe(8000);
-    expect(args.tools[0]?.max_uses).toBe(2);
+    // Sin maxVariants explícito el default sigue siendo 3.
+    expect(create).toHaveBeenCalledTimes(3);
+    for (const call of create.mock.calls) {
+      const args = call[0] as CreateArgs;
+      // El modelo (opus 4.8) NO soporta thinking "enabled": adaptive + effort.
+      expect(args.thinking).toEqual({ type: "adaptive" });
+      expect(args.output_config).toEqual({ effort: "low" });
+      expect(args.max_tokens).toBe(8000);
+      expect(args.tools[0]?.max_uses).toBe(2);
+    }
   });
 });
 

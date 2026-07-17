@@ -16,7 +16,6 @@ export const maxDuration = 60;
 // Presupuesto acotado para caber en 60 s (afinable midiendo en producción).
 const VERCEL_SEARCH_BUDGET: SearchBudget = {
   maxWebSearchUses: 2,
-  maxEmptyRetries: 0,
   maxTokens: 8000,
   effort: "low",
 };
