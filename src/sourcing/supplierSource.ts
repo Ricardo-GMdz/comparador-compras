@@ -3,6 +3,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { Supplier, SupplierCandidate, SupplierContact } from "../domain/supplier.js";
+import { supplierKey } from "../directory/store.js";
 import { logger } from "../logging/logger.js";
 import { parseSuppliers } from "./supplierSchema.js";
 
@@ -11,13 +12,25 @@ const MAX_TOKENS = 16000;
 const WEB_SEARCH_TOOL_TYPE = "web_search_20260209";
 const WEB_SEARCH_TOOL_NAME = "web_search";
 const MAX_WEB_SEARCH_USES = 5;
-// Reintentos extra cuando la búsqueda devuelve 0 proveedores.
-const MAX_EMPTY_RETRIES = 1;
+// Variantes de query por búsqueda (fan-out en paralelo).
+const MAX_VARIANTS = 3;
 // Enriquecimiento de contacto: visitar la web del proveedor con web_fetch.
 const WEB_FETCH_TOOL_TYPE = "web_fetch_20260209";
 const WEB_FETCH_TOOL_NAME = "web_fetch";
 const MAX_WEB_FETCH_USES = 3;
 const MAX_ENRICH_SEARCH_USES = 2;
+
+/**
+ * Variantes fijas de la búsqueda para el fan-out (sin gastar tokens en
+ * generarlas). La primera es SIEMPRE la query tal cual la escribió el usuario.
+ */
+export function buildQueryVariants(query: string): readonly string[] {
+  return [
+    query,
+    `distribuidor mayorista de ${query} en México`,
+    `proveedores de ${query} al por mayor`,
+  ];
+}
 
 /** Consulta a la que responde una fuente de proveedores. */
 export interface SupplierQuery {
@@ -28,8 +41,9 @@ export interface SupplierQuery {
 /** Presupuesto opcional para acotar la búsqueda (deploy con límite de tiempo). */
 export interface SearchBudget {
   maxWebSearchUses: number;
-  maxEmptyRetries: number;
   maxTokens: number;
+  /** Cuántas variantes de query corre el fan-out (default 3; con 1 no hay fan-out). */
+  maxVariants?: number;
   /**
    * Nivel de esfuerzo de razonamiento (`output_config.effort`). El modelo
    * (opus 4.8) usa thinking "adaptive" + effort para controlar cuánto piensa;
@@ -76,6 +90,13 @@ function buildSystemPrompt(): string {
     "Si el proveedor publica un precio de lista/catálogo (aunque no sea de mayoreo),",
     'reportalo en "catalogPrice" con su "currency". Si publica su dirección/ciudad,',
     'ponela en "address". No inventes ninguno de los dos: omitilos si no están.',
+    'REGLA DE CAMPOS: NUNCA dejes un precio o una dirección solo en "notes".',
+    'Todo precio hallado va en "wholesalePrice" (si es de volumen/mayoreo) o en',
+    '"catalogPrice" (si es de lista/catálogo), siempre con su "currency"; toda',
+    'dirección o ciudad va en "address". "notes" es solo para contexto extra.',
+    'Incorrecto: { "name": "X", "notes": "precio de lista $439.99, en Monterrey" }.',
+    'Correcto: { "name": "X", "catalogPrice": 439.99, "currency": "USD",',
+    '  "address": "Monterrey, NL", "notes": "precio publicado en su catálogo" }.',
     'Marcá "trusted": true solo para empresas reconocidas/verificables (con datos de contacto reales).',
     'Priorizá precio y datos de contacto. Si no encontrás, devolvé { "suppliers": [] }.',
   ].join("\n");
@@ -89,7 +110,7 @@ function buildUserPrompt(q: SupplierQuery, localidad?: string): string {
   if (localidad !== undefined && localidad.trim().length > 0) {
     lineas.push(
       `PRIORIDAD 1: proveedores locales de ${localidad.trim()} o su zona metropolitana;`,
-      "después el resto de la región. Indicá la ciudad del proveedor en 'notes' si la conocés.",
+      "después el resto de la región. Indicá la ciudad del proveedor en 'address' si la conocés.",
     );
   }
   lineas.push(
@@ -173,7 +194,7 @@ function parseJsonObject(text: string): unknown {
 export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
   // Valores efectivos: si hay searchBudget se acotan, si no se usan los defaults.
   const maxWebSearchUses = deps.searchBudget?.maxWebSearchUses ?? MAX_WEB_SEARCH_USES;
-  const maxEmptyRetries = deps.searchBudget?.maxEmptyRetries ?? MAX_EMPTY_RETRIES;
+  const maxVariants = deps.searchBudget?.maxVariants ?? MAX_VARIANTS;
   const maxTokens = deps.searchBudget?.maxTokens ?? MAX_TOKENS;
   const effort = deps.searchBudget?.effort;
 
@@ -202,22 +223,41 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
     return parseSuppliers(parseJsonObject(text), q.region);
   }
 
-  // Busca con hasta maxEmptyRetries reintentos si la búsqueda viene vacía.
+  // Fan-out: corre las variantes de la query en paralelo y une los resultados.
+  // Una variante que falla no tumba a las demás; si TODAS fallan, se propaga.
   async function search(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
-    for (let attempt = 0; attempt <= maxEmptyRetries; attempt += 1) {
-      const candidates = await searchOnce(q);
-      if (candidates.length > 0) {
-        return candidates;
+    const variants = buildQueryVariants(q.query).slice(0, maxVariants);
+    const settled = await Promise.allSettled(
+      variants.map((variant) => searchOnce({ query: variant, region: q.region })),
+    );
+
+    const failures = settled.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    for (const failure of failures) {
+      logger.warn("sourcing: una variante del fan-out falló", {
+        query: q.query,
+        region: q.region,
+        reason: failure.reason instanceof Error ? failure.reason.message : String(failure.reason),
+      });
+    }
+    if (settled.length > 0 && failures.length === settled.length) {
+      const reason = failures[0]?.reason;
+      throw reason instanceof Error ? reason : new Error(String(reason));
+    }
+
+    // Unión deduplicada con la misma identidad del directorio: el primero gana.
+    const byKey = new Map<string, SupplierCandidate>();
+    for (const result of settled) {
+      if (result.status !== "fulfilled") {
+        continue;
       }
-      if (attempt < maxEmptyRetries) {
-        logger.warn("sourcing: búsqueda sin proveedores, reintentando", {
-          query: q.query,
-          region: q.region,
-          attempt: attempt + 1,
-        });
+      for (const candidate of result.value) {
+        const key = supplierKey(candidate);
+        if (!byKey.has(key)) {
+          byKey.set(key, candidate);
+        }
       }
     }
-    return [];
+    return [...byKey.values()];
   }
 
   // Visita la web del proveedor y devuelve SOLO los campos de contacto faltantes.
