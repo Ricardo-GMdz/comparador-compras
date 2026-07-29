@@ -31,6 +31,24 @@ function fakeClient(text: string) {
   return fakeClientSequence([text]).client;
 }
 
+const NOW = "2026-07-01T00:00:00.000Z";
+
+/** Proveedor persistido base para los tests de enriquecimiento. */
+function makeSupplier(overrides: Partial<Supplier> = {}): Supplier {
+  return {
+    name: "Aceros del Norte",
+    website: "https://aceros.mx",
+    material: "lámina",
+    region: "mx",
+    trusted: true,
+    contact: {},
+    status: "pendiente",
+    firstSeen: NOW,
+    lastSeen: NOW,
+    ...overrides,
+  };
+}
+
 const RESPONSE = JSON.stringify({
   suppliers: [
     {
@@ -200,24 +218,6 @@ describe("createSupplierSource", () => {
   });
 
   describe("enrichContact", () => {
-    const NOW = "2026-07-01T00:00:00.000Z";
-
-    /** Proveedor persistido base para los tests de enriquecimiento. */
-    function makeSupplier(overrides: Partial<Supplier> = {}): Supplier {
-      return {
-        name: "Aceros del Norte",
-        website: "https://aceros.mx",
-        material: "lámina",
-        region: "mx",
-        trusted: true,
-        contact: {},
-        status: "pendiente",
-        firstSeen: NOW,
-        lastSeen: NOW,
-        ...overrides,
-      };
-    }
-
     const CONTACT_RESPONSE = JSON.stringify({
       contact: { email: "ventas@aceros.mx", phone: "+52 81 1234 5678" },
     });
@@ -309,6 +309,31 @@ describe("createSupplierSource — searchBudget", () => {
       expect(args.max_tokens).toBe(8000);
       expect(args.tools[0]?.max_uses).toBe(2);
     }
+  });
+
+  it("enrichContact respeta el budget (maxTokens y effort) cuando está presente", async () => {
+    const { client, create } = fakeClientSequence([JSON.stringify({ contact: {} })]);
+    const source = createSupplierSource({
+      client,
+      searchBudget: { maxWebSearchUses: 2, maxTokens: 8000, effort: "low" },
+    });
+
+    await source.enrichContact(makeSupplier());
+
+    const args = create.mock.calls[0]?.[0] as CreateArgs;
+    expect(args.max_tokens).toBe(8000);
+    expect(args.output_config).toEqual({ effort: "low" });
+  });
+
+  it("enrichContact sin budget mantiene los defaults (16000 tokens, sin effort)", async () => {
+    const { client, create } = fakeClientSequence([JSON.stringify({ contact: {} })]);
+    const source = createSupplierSource({ client });
+
+    await source.enrichContact(makeSupplier());
+
+    const args = create.mock.calls[0]?.[0] as CreateArgs;
+    expect(args.max_tokens).toBe(16000);
+    expect(args.output_config).toBeUndefined();
   });
 });
 

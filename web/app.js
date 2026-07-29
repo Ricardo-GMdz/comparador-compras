@@ -3,6 +3,9 @@ const $ = (id) => document.getElementById(id);
 // Estados posibles de un proveedor (espejo del enum del dominio).
 const ESTADOS = ["pendiente", "contactado", "cotizó", "descartado"];
 
+// Tope de notas (espejo de MAX_NOTES_LENGTH del server).
+const MAX_NOTAS = 2000;
+
 // Estado de la vista: directorio completo + mejor opción de la última búsqueda.
 let directorio = [];
 let mejorOpcion = null;
@@ -559,7 +562,15 @@ function onFilaClick(e) {
   const supplier = proveedorPorKey(key);
   if (!supplier) return;
   if (el.dataset.action === "notas") {
-    const nuevas = prompt("Notas del proveedor:", supplier.notes ?? "");
+    // Espejo del tope del server (MAX_NOTES_LENGTH): se re-abre el prompt con el
+    // texto tipeado para que el usuario recorte sin perder lo que escribió.
+    let nuevas = prompt("Notas del proveedor:", supplier.notes ?? "");
+    while (nuevas !== null && nuevas.length > MAX_NOTAS) {
+      nuevas = prompt(
+        `La nota supera los ${MAX_NOTAS} caracteres (tiene ${nuevas.length}). Recortala:`,
+        nuevas,
+      );
+    }
     if (nuevas !== null) patchProveedor(key, { notes: nuevas });
   } else if (el.dataset.action === "cotizar") {
     abrirCotizacion(supplier);

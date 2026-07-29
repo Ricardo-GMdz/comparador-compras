@@ -38,7 +38,10 @@ export interface SupplierQuery {
   region: string;
 }
 
-/** Presupuesto opcional para acotar la búsqueda (deploy con límite de tiempo). */
+/**
+ * Presupuesto opcional para acotar la búsqueda y el enriquecimiento de contacto
+ * (deploy con límite de tiempo). maxTokens y effort aplican a ambas operaciones.
+ */
 export interface SearchBudget {
   maxWebSearchUses: number;
   maxTokens: number;
@@ -271,8 +274,9 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
 
     const response = await deps.client.messages.create({
       model: MODEL,
-      max_tokens: MAX_TOKENS,
+      max_tokens: maxTokens,
       thinking: { type: "adaptive" },
+      ...(effort !== undefined ? { output_config: { effort } } : {}),
       system: buildEnrichSystemPrompt(),
       tools: [
         { type: WEB_FETCH_TOOL_TYPE, name: WEB_FETCH_TOOL_NAME, max_uses: MAX_WEB_FETCH_USES },

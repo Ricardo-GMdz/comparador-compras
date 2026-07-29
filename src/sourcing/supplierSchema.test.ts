@@ -55,6 +55,15 @@ describe("parseSuppliers", () => {
     expect(() => parseSuppliers({ foo: 1 }, "mx")).toThrow();
   });
 
+  it("trunca notes largas del modelo al tope del dominio sin descartar al proveedor", () => {
+    const data = {
+      suppliers: [{ name: "X", material: "y", contact: {}, notes: "n".repeat(2500) }],
+    };
+    const result = parseSuppliers(data, "mx");
+    expect(result).toHaveLength(1);
+    expect(result[0]?.notes).toHaveLength(2000);
+  });
+
   describe("normalización de priceUnit", () => {
     const parseUnit = (raw: string) => {
       const data = { suppliers: [{ name: "X", material: "y", contact: {}, priceUnit: raw }] };

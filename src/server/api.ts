@@ -6,7 +6,7 @@ import { getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { COOKIE_NAME, PUBLIC_PATHS, hashEqual, makeToken, verifyToken } from "./auth.js";
-import type { Supplier } from "../domain/supplier.js";
+import { MAX_NOTES_LENGTH, type Supplier } from "../domain/supplier.js";
 import type { SupplierSource } from "../sourcing/supplierSource.js";
 import { mergeSuppliers, removeSupplier, supplierKey, updateSupplier } from "../directory/store.js";
 import { buildPublicDirectory, type PublicSupplier } from "../directory/publicDirectory.js";
@@ -32,16 +32,23 @@ export interface ApiDeps {
 // Duración de la cookie de sesión: 30 días.
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 
+// Topes de entrada: la query entra al prompt de CADA llamada del fan-out (se
+// paga como input por variante) y notes viaja completo en cada lectura/escritura
+// del directorio; sin tope no hay cota de costo por request ni de tamaño del store.
+const MAX_QUERY_LENGTH = 200;
+const MAX_REGION_LENGTH = 60;
+const MAX_QUOTE_FIELD_LENGTH = 200;
+
 const buscarSchema = z.object({
-  query: z.string().min(1),
-  region: z.string().min(1).default("global"),
+  query: z.string().trim().min(1).max(MAX_QUERY_LENGTH),
+  region: z.string().trim().min(1).max(MAX_REGION_LENGTH).default("global"),
 });
 
 // Body del PATCH de gestión: status, notes y/o favorite, con al menos uno presente.
 const patchSchema = z
   .object({
     status: z.enum(["pendiente", "contactado", "cotizó", "descartado"]).optional(),
-    notes: z.string().optional(),
+    notes: z.string().max(MAX_NOTES_LENGTH).optional(),
     favorite: z.boolean().optional(),
   })
   .refine(
@@ -52,8 +59,8 @@ const patchSchema = z
 
 // Query del pedido de cotización: cantidad y especificación, ambas requeridas.
 const cotizacionSchema = z.object({
-  quantity: z.string().min(1),
-  spec: z.string().min(1),
+  quantity: z.string().min(1).max(MAX_QUOTE_FIELD_LENGTH),
+  spec: z.string().min(1).max(MAX_QUOTE_FIELD_LENGTH),
 });
 
 /** Columnas del CSV exportado (resumen legible en español), en orden. */
@@ -217,7 +224,13 @@ export function buildApi(deps: ApiDeps): Hono {
   app.post("/api/buscar", async (c) => {
     const parsed = buscarSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) {
-      return c.json({ ok: false, error: "Parámetros inválidos: se requiere 'query'." }, 400);
+      return c.json(
+        {
+          ok: false,
+          error: `Parámetros inválidos: 'query' es obligatoria (hasta ${MAX_QUERY_LENGTH} caracteres) y 'region' admite hasta ${MAX_REGION_LENGTH}.`,
+        },
+        400,
+      );
     }
     const { query, region } = parsed.data;
 
@@ -259,8 +272,7 @@ export function buildApi(deps: ApiDeps): Hono {
       return c.json(
         {
           ok: false,
-          error:
-            "Body inválido: se espera 'status' (enum), 'notes' (texto) y/o 'favorite' (booleano).",
+          error: `Body inválido: se espera 'status' (enum), 'notes' (texto, hasta ${MAX_NOTES_LENGTH} caracteres) y/o 'favorite' (booleano).`,
         },
         400,
       );
@@ -282,7 +294,10 @@ export function buildApi(deps: ApiDeps): Hono {
     });
     if (!parsed.success) {
       return c.json(
-        { ok: false, error: "Parámetros inválidos: se requieren 'quantity' y 'spec'." },
+        {
+          ok: false,
+          error: `Parámetros inválidos: se requieren 'quantity' y 'spec' (hasta ${MAX_QUOTE_FIELD_LENGTH} caracteres cada uno).`,
+        },
         400,
       );
     }
