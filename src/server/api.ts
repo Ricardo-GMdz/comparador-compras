@@ -4,6 +4,7 @@
 import { Hono } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
+import Anthropic from "@anthropic-ai/sdk";
 import { COOKIE_NAME, PUBLIC_PATHS, hashEqual, makeToken, verifyToken } from "./auth.js";
 import type { Supplier } from "../domain/supplier.js";
 import type { SupplierSource } from "../sourcing/supplierSource.js";
@@ -120,6 +121,34 @@ function activeSuppliers(suppliers: readonly Supplier[]): readonly Supplier[] {
   return suppliers.filter((s) => s.status !== "descartado");
 }
 
+/**
+ * Mensaje y status seguros para el cliente ante un fallo del sourcing
+ * (búsqueda o enriquecimiento): nunca se expone `error.message` crudo — puede
+ * traer detalle interno del SDK/API de Anthropic (request-id, tipo de error
+ * de facturación, etc.). Se distingue con 503 y un mensaje que invita a
+ * reintentar: un 429 (rate limit) o 5xx (overloaded incluido) de la API de
+ * Anthropic, o un fallo de conexión/timeout del SDK (sin status HTTP, mismo
+ * origen "reintentá más tarde" que un 429/5xx). Cualquier otro fallo es un
+ * 502 genérico. El mensaje es endpoint-agnóstico: lo usan tanto /api/buscar
+ * como /api/proveedor/:key/enriquecer.
+ */
+function sourcingErrorResponse(
+  error: unknown,
+  fallbackMessage: string,
+): { message: string; status: 502 | 503 } {
+  const isSaturated =
+    error instanceof Anthropic.APIConnectionError ||
+    (error instanceof Anthropic.APIError &&
+      (error.status === 429 || (typeof error.status === "number" && error.status >= 500)));
+  if (isSaturated) {
+    return {
+      message: "El servicio está saturado. Probá de nuevo en unos minutos.",
+      status: 503,
+    };
+  }
+  return { message: fallbackMessage, status: 502 };
+}
+
 export function buildApi(deps: ApiDeps): Hono {
   const app = new Hono();
 
@@ -213,9 +242,13 @@ export function buildApi(deps: ApiDeps): Hono {
         total: suppliers.length,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Error inesperado";
-      logger.error("buscar: falló el sourcing", { query, region, error: message });
-      return c.json({ ok: false, error: `Falló la búsqueda: ${message}` }, 502);
+      const detail = error instanceof Error ? error.message : String(error);
+      logger.error("buscar: falló el sourcing", { query, region, error: detail });
+      const { message, status } = sourcingErrorResponse(
+        error,
+        "No se pudo completar la búsqueda. Intentá de nuevo en unos minutos.",
+      );
+      return c.json({ ok: false, error: message }, status);
     }
   });
 
@@ -290,9 +323,13 @@ export function buildApi(deps: ApiDeps): Hono {
       const merged = updated.find((s) => supplierKey(s) === key);
       return c.json({ ok: true, contact: merged?.contact ?? {} });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Error inesperado";
-      logger.error("enriquecer: falló el enriquecimiento de contacto", { key, error: message });
-      return c.json({ ok: false, error: `Falló el enriquecimiento: ${message}` }, 502);
+      const detail = error instanceof Error ? error.message : String(error);
+      logger.error("enriquecer: falló el enriquecimiento de contacto", { key, error: detail });
+      const { message, status } = sourcingErrorResponse(
+        error,
+        "No se pudo completar el enriquecimiento. Intentá de nuevo en unos minutos.",
+      );
+      return c.json({ ok: false, error: message }, status);
     }
   });
 
@@ -315,9 +352,15 @@ export function buildApi(deps: ApiDeps): Hono {
       await deps.savePublicDirectory(publicSuppliers);
       return c.json({ ok: true, publicados: publicSuppliers.length });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Error inesperado";
-      logger.error("publicar: falló la escritura del directorio público", { error: message });
-      return c.json({ ok: false, error: `No se pudo publicar: ${message}` }, 500);
+      const detail = error instanceof Error ? error.message : String(error);
+      logger.error("publicar: falló la escritura del directorio público", { error: detail });
+      return c.json(
+        {
+          ok: false,
+          error: "No se pudo publicar el directorio. Intentá de nuevo en unos minutos.",
+        },
+        500,
+      );
     }
   });
 

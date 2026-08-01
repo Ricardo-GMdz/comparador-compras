@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import Anthropic from "@anthropic-ai/sdk";
 import { buildApi } from "./api.js";
 import type { Supplier } from "../domain/supplier.js";
 import type { PublicSupplier } from "../directory/publicDirectory.js";
@@ -127,6 +128,82 @@ describe("API", () => {
     expect(res.status).toBe(502);
     const body = (await res.json()) as ApiBody;
     expect(body.ok).toBe(false);
+  });
+
+  it("POST /api/buscar no filtra el error.message crudo del SDK al cliente", async () => {
+    const { deps } = fakeDeps();
+    deps.source.search = vi.fn(async () => {
+      throw new Error("detalle interno del SDK: request_id abc123, org sk-ant-...");
+    });
+    const app = buildApi(deps);
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "lámina", region: "mx" }),
+    });
+    const body = (await res.json()) as ApiBody;
+    expect(body.error).not.toContain("request_id abc123");
+    expect(body.error).not.toContain("sk-ant-");
+  });
+
+  it("POST /api/buscar responde 503 con mensaje de saturación cuando Anthropic devuelve 429 (rate limit)", async () => {
+    const { deps } = fakeDeps();
+    deps.source.search = vi.fn(async () => {
+      throw new Anthropic.RateLimitError(
+        429,
+        { message: "rate limited" },
+        "Rate limited",
+        new Headers(),
+      );
+    });
+    const app = buildApi(deps);
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "lámina", region: "mx" }),
+    });
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as ApiBody;
+    expect(body.error).toContain("saturado");
+  });
+
+  it("POST /api/buscar responde 503 con mensaje de saturación cuando Anthropic devuelve 5xx (overloaded)", async () => {
+    const { deps } = fakeDeps();
+    deps.source.search = vi.fn(async () => {
+      throw Anthropic.APIError.generate(
+        529,
+        { message: "overloaded" },
+        "Overloaded",
+        new Headers(),
+      );
+    });
+    const app = buildApi(deps);
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "lámina", region: "mx" }),
+    });
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as ApiBody;
+    expect(body.error).toContain("saturado");
+  });
+
+  it("POST /api/buscar responde 503 cuando Anthropic falla por conexión/timeout", async () => {
+    const { deps } = fakeDeps();
+    deps.source.search = vi.fn(async () => {
+      // Sin respuesta HTTP (status undefined): lo que lanza el SDK ante un
+      // timeout o un fallo de red tras agotar reintentos, no un 4xx/5xx.
+      throw new Anthropic.APIConnectionError({ message: "fetch failed" });
+    });
+    const app = buildApi(deps);
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "lámina", region: "mx" }),
+    });
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as ApiBody;
+    expect(body.error).toContain("saturado");
   });
 
   it("PATCH /api/proveedor/:key cambia status y notes y persiste", async () => {
@@ -292,6 +369,41 @@ describe("API", () => {
     expect(store.current[0]?.contact).toEqual({});
   });
 
+  it("POST /api/proveedor/:key/enriquecer no filtra el error.message crudo del SDK al cliente", async () => {
+    const { deps } = fakeDeps([makeSupplier({ website: "https://a.mx" })]);
+    deps.source.enrichContact = vi.fn(async () => {
+      throw new Error("detalle interno del SDK: request_id xyz789");
+    });
+    const app = buildApi(deps);
+    const res = await app.request(`/api/proveedor/${encodeURIComponent("d:a.mx")}/enriquecer`, {
+      method: "POST",
+    });
+    const body = (await res.json()) as ApiBody;
+    expect(body.error).not.toContain("request_id xyz789");
+  });
+
+  it("POST /api/proveedor/:key/enriquecer responde 503 con mensaje de saturación cuando Anthropic devuelve 429", async () => {
+    const { deps } = fakeDeps([makeSupplier({ website: "https://a.mx" })]);
+    deps.source.enrichContact = vi.fn(async () => {
+      throw new Anthropic.RateLimitError(
+        429,
+        { message: "rate limited" },
+        "Rate limited",
+        new Headers(),
+      );
+    });
+    const app = buildApi(deps);
+    const res = await app.request(`/api/proveedor/${encodeURIComponent("d:a.mx")}/enriquecer`, {
+      method: "POST",
+    });
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as ApiBody;
+    expect(body.error).toContain("saturado");
+    // El mensaje de saturación es genérico: no debe hablar de "búsqueda"
+    // cuando lo que falló fue un enriquecimiento de contacto.
+    expect(body.error).not.toContain("búsqueda");
+  });
+
   it("GET /api/proveedor/:key/cotizacion devuelve el mensaje de cotización", async () => {
     const { deps } = fakeDeps([
       makeSupplier({ name: "Aceros MX", website: "https://a.mx", material: "lámina" }),
@@ -424,6 +536,17 @@ describe("API", () => {
     expect(res.status).toBe(500);
     const body = (await res.json()) as ApiBody;
     expect(body.ok).toBe(false);
+  });
+
+  it("POST /api/publicar no filtra el error.message crudo al cliente", async () => {
+    const { deps } = fakeDeps([makeSupplier({ status: "contactado" })]);
+    deps.savePublicDirectory = vi.fn(async () => {
+      throw new Error("disco lleno: /var/task ENOSPC");
+    });
+    const app = buildApi(deps);
+    const res = await app.request("/api/publicar", { method: "POST" });
+    const body = (await res.json()) as ApiBody;
+    expect(body.error).not.toContain("ENOSPC");
   });
 });
 
