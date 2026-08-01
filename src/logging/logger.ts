@@ -25,8 +25,8 @@ export interface Logger {
 }
 
 // Mapeo de nivel a stream de salida: TODOS los logs (info/warn/error) van a
-// stderr. stdout queda reservado para la SALIDA del programa (el resultado de
-// la comparación), de modo que se pueda redirigir/parsear sin ruido de logs.
+// stderr, para no mezclarse con la salida del proceso (stdout) ni con la
+// respuesta HTTP que arma el server.
 const LEVEL_STREAMS: Readonly<Record<LogLevel, NodeJS.WritableStream>> = {
   info: process.stderr,
   warn: process.stderr,

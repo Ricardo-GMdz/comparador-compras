@@ -8,9 +8,9 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
-      // Solo medimos cobertura del código fuente, no de configs ni del bin.
+      // Solo medimos cobertura del código fuente, no de los tests.
       include: ["src/**/*.ts"],
-      exclude: ["src/**/*.{test,spec}.ts", "src/index.ts"],
+      exclude: ["src/**/*.{test,spec}.ts"],
     },
   },
 });
