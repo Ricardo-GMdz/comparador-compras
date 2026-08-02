@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { createSupplierSource, buildQueryVariants } from "./supplierSource.js";
+import { logger } from "../logging/logger.js";
 import type { Supplier } from "../domain/supplier.js";
 
 // Cliente Anthropic mínimo mockeado: solo messages.create.
@@ -18,6 +19,13 @@ function fakeClientOutcomes(outcomes: readonly FakeOutcome[]) {
     return {
       stop_reason: "end_turn",
       content: [{ type: "text", text: outcome.text }],
+      usage: {
+        input_tokens: 1000,
+        output_tokens: 200,
+        cache_creation_input_tokens: null,
+        cache_read_input_tokens: null,
+        server_tool_use: { web_search_requests: 1, web_fetch_requests: 0 },
+      },
     };
   });
   return { client: { messages: { create } } as never, create };
@@ -63,7 +71,33 @@ const RESPONSE = JSON.stringify({
   ],
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("createSupplierSource", () => {
+  it("registra la telemetría de uso del modelo en cada búsqueda", async () => {
+    const info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+    const source = createSupplierSource({
+      client: fakeClient(RESPONSE),
+      searchBudget: { maxWebSearchUses: 5, maxTokens: 16000, maxVariants: 1 },
+    });
+
+    await source.search({ query: "lámina galvanizada", region: "mx" });
+
+    expect(info).toHaveBeenCalledWith(
+      "llm_usage",
+      expect.objectContaining({
+        action: "sourcing_search",
+        query: "lámina galvanizada",
+        region: "mx",
+        inputTokens: 1000,
+        outputTokens: 200,
+        webSearchRequests: 1,
+      }),
+    );
+  });
+
   it("busca proveedores y los mapea a SupplierCandidate", async () => {
     const source = createSupplierSource({ client: fakeClient(RESPONSE) });
     const result = await source.search({ query: "lámina galvanizada", region: "mx" });
@@ -265,6 +299,36 @@ describe("createSupplierSource", () => {
 
       expect(create).not.toHaveBeenCalled();
       expect(contact).toEqual({});
+    });
+
+    it("registra la telemetría de uso con el proveedor y su web como contexto", async () => {
+      const info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+      const { client } = fakeClientSequence([CONTACT_RESPONSE]);
+      const source = createSupplierSource({ client });
+
+      await source.enrichContact(makeSupplier());
+
+      expect(info).toHaveBeenCalledWith(
+        "llm_usage",
+        expect.objectContaining({
+          action: "sourcing_enrich_contact",
+          supplier: "Aceros del Norte",
+          website: "https://aceros.mx",
+          inputTokens: 1000,
+          outputTokens: 200,
+        }),
+      );
+    });
+
+    it("no emite telemetría cuando no hay website (no hubo llamada que medir)", async () => {
+      const info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+      const { client } = fakeClientSequence([CONTACT_RESPONSE]);
+      const source = createSupplierSource({ client });
+
+      await source.enrichContact(makeSupplier({ website: undefined }));
+
+      const usageLogs = info.mock.calls.filter(([event]) => event === "llm_usage");
+      expect(usageLogs).toHaveLength(0);
     });
   });
 });
