@@ -10,7 +10,7 @@ type FakeOutcome = { text: string } | { reject: string };
 
 function fakeClientOutcomes(outcomes: readonly FakeOutcome[]) {
   let call = 0;
-  const create = vi.fn(async (_params: unknown) => {
+  const create = vi.fn(async (_params: unknown, _options?: unknown) => {
     const outcome = outcomes[Math.min(call, outcomes.length - 1)] ?? { text: "" };
     call += 1;
     if ("reject" in outcome) {
@@ -96,6 +96,33 @@ describe("createSupplierSource", () => {
         webSearchRequests: 1,
       }),
     );
+  });
+
+  it("con timeoutMs en el budget, cada variante del fan-out acota la llamada al SDK", async () => {
+    const { client, create } = fakeClientOutcomes([{ text: RESPONSE }, { text: RESPONSE }]);
+    const source = createSupplierSource({
+      client,
+      searchBudget: { maxWebSearchUses: 2, maxTokens: 8000, maxVariants: 2, timeoutMs: 45_000 },
+    });
+
+    await source.search({ query: "lámina", region: "mx" });
+
+    expect(create).toHaveBeenCalledTimes(2);
+    for (const call of create.mock.calls) {
+      expect(call[1]).toEqual({ timeout: 45_000, maxRetries: 0 });
+    }
+  });
+
+  it("sin timeoutMs las llamadas al SDK van sin opciones de request", async () => {
+    const { client, create } = fakeClientOutcomes([{ text: RESPONSE }]);
+    const source = createSupplierSource({
+      client,
+      searchBudget: { maxWebSearchUses: 2, maxTokens: 8000, maxVariants: 1 },
+    });
+
+    await source.search({ query: "lámina", region: "mx" });
+
+    expect(create.mock.calls[0]).toHaveLength(1);
   });
 
   it("busca proveedores y los mapea a SupplierCandidate", async () => {
@@ -318,6 +345,18 @@ describe("createSupplierSource", () => {
           outputTokens: 200,
         }),
       );
+    });
+
+    it("con timeoutMs en el budget, el enriquecimiento acota la llamada al SDK", async () => {
+      const { client, create } = fakeClientSequence([CONTACT_RESPONSE]);
+      const source = createSupplierSource({
+        client,
+        searchBudget: { maxWebSearchUses: 2, maxTokens: 8000, timeoutMs: 45_000 },
+      });
+
+      await source.enrichContact(makeSupplier());
+
+      expect(create.mock.calls[0]?.[1]).toEqual({ timeout: 45_000, maxRetries: 0 });
     });
 
     it("no emite telemetría cuando no hay website (no hubo llamada que medir)", async () => {

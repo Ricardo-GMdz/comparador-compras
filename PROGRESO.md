@@ -10,6 +10,23 @@ Bitácora append-only de cada corrida autónoma. Lo más reciente arriba.
 - Verificación: <comando corrido y resultado>
 -->
 
+## 2026-08-02 19:15
+
+- Tarea: verificación de `llm_usage` con búsqueda real → encontró producción
+  rota (POST /api/buscar → 504 FUNCTION_INVOCATION_TIMEOUT, 2/2 intentos; la
+  función muere a los 60 s sin catch, log ni telemetría). Telemetría verificada
+  OK por el path compilado con presupuesto de prod (evento real: 39.826 in /
+  1.031 out / 2 búsquedas / $0,2449 — aritmética exacta). Causa estructural:
+  una variante de web_search+Opus tardó >3 min (status de Anthropic operativo).
+  Fix: `timeoutMs` en `SearchBudget` → `callModel` pasa `timeout` + `maxRetries: 0`
+  al SDK; Vercel a 45 s/llamada; degradación parcial ya provista por
+  `Promise.allSettled`; todas vencidas → 503 con log. E2E real del fix: corte
+  exacto a 45,0 s, `APIConnectionTimeoutError`, 2 warns de variante — cabe en 60 s.
+- Rama/PR: `fix/timeout-llm-degradacion-parcial`
+- Resultado: PR para revisión
+- Verificación: typecheck + lint + 211/211 tests en verde (TDD: 3 tests RED
+  primero); E2E con búsqueda real contra la API
+
 ## 2026-08-02 17:30
 
 - Tarea: merge y verificación de la serie de endurecimiento completa (Fases 1–2
@@ -47,7 +64,7 @@ Bitácora append-only de cada corrida autónoma. Lo más reciente arriba.
   producción `thinking: adaptive` + `output_config.effort` (Opus 4.8 no soporta
   thinking enabled con budget); `GET /api/health` público; script
   `scripts/repoblar.ts`; v2.4 — fan-out de 3 variantes de búsqueda en paralelo
-  + extracción a campos estructurados (precio/dirección nunca solo en notes).
+  más extracción a campos estructurados (precio/dirección nunca solo en notes).
 - Rama/PR: PRs #8–#16 (v2.3, rediseño, fixes, #13 thinking, #14 health,
   #15 repoblar, #16 v2.4)
 - Resultado: fusionado a `main`

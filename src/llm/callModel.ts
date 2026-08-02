@@ -20,6 +20,18 @@ export interface CallModelContext {
   readonly [key: string]: unknown;
 }
 
+/** Opciones de la llamada (deadline duro para entornos con límite de tiempo). */
+export interface CallModelOptions {
+  /**
+   * Timeout de la request al SDK, en ms. Además desactiva los reintentos del
+   * SDK: reintenta timeouts por defecto (wall-clock = timeout × (reintentos+1))
+   * y con un deadline duro (p.ej. los 60 s de Vercel) no hay lugar para eso.
+   * Al vencer, el SDK lanza APIConnectionTimeoutError (subclase de
+   * APIConnectionError), que el server ya mapea a 503 "saturado".
+   */
+  readonly timeoutMs?: number;
+}
+
 /**
  * Ejecuta la llamada y, en éxito, loguea el uso de tokens y el costo
  * estimado. Un error se propaga sin loguear usage (no hubo respuesta que
@@ -30,8 +42,12 @@ export async function callModel(
   client: Anthropic,
   params: CallModelParams,
   context: CallModelContext,
+  options?: CallModelOptions,
 ): Promise<Anthropic.Messages.Message> {
-  const response = await client.messages.create(params);
+  const response =
+    options?.timeoutMs !== undefined
+      ? await client.messages.create(params, { timeout: options.timeoutMs, maxRetries: 0 })
+      : await client.messages.create(params);
 
   // `usage` viene siempre en la API real, pero se lee de forma defensiva: un
   // log de telemetría no puede tumbar una búsqueda ya respondida.

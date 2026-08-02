@@ -1,7 +1,7 @@
 # Arquitectura — comparador-compras
 
 App web de **sourcing de proveedores B2B**: dada una búsqueda (producto/material
-+ región), un agente con `web_search`/`web_fetch` encuentra **proveedores**,
+y región), un agente con `web_search`/`web_fetch` encuentra **proveedores**,
 reúne sus **datos de contacto**, los acumula en un **directorio persistente** y
 recomienda la **mejor opción** de compra.
 
@@ -44,13 +44,13 @@ recomienda la **mejor opción** de compra.
 
 ## Los dos entries
 
-| | Local (`src/server/index.ts`) | Producción (`api/index.ts`, Vercel) |
-|---|---|---|
-| Store | `directorio.json` (`loadDirectory`/`saveDirectory`, escritura atómica) | Redis Upstash (`createRedisStore`) |
-| Auth | sin auth | `ACCESS_KEY` + cookie (`src/server/auth.ts`) |
-| Rate limit | no | login 5/15 min por IP; buscar+enriquecer 10/h global |
-| Presupuesto de búsqueda | sin recortes (defaults: 5 búsquedas, 16K tokens, 3 variantes) | `VERCEL_SEARCH_BUDGET`: 2 búsquedas, 8K tokens, effort low, 2 variantes (límite de 60 s del plan Hobby) |
-| Frontend | estáticos de `web/` | los mismos, servidos por Vercel; `landing/` pública |
+|                         | Local (`src/server/index.ts`)                                               | Producción (`api/index.ts`, Vercel)                                                                                                                                                                        |
+| ----------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Store                   | `directorio.json` (`loadDirectory`/`saveDirectory`, escritura atómica)      | Redis Upstash (`createRedisStore`)                                                                                                                                                                         |
+| Auth                    | sin auth                                                                    | `ACCESS_KEY` + cookie (`src/server/auth.ts`)                                                                                                                                                               |
+| Rate limit              | no                                                                          | login 5/15 min por IP; buscar+enriquecer 10/h global                                                                                                                                                       |
+| Presupuesto de búsqueda | sin recortes (defaults: 5 búsquedas, 16K tokens, 3 variantes, sin deadline) | `VERCEL_SEARCH_BUDGET`: 2 búsquedas, 8K tokens, effort low, 2 variantes, **timeout 45 s por llamada** (límite de 60 s del plan Hobby; sin deadline propio una llamada lenta muere en 504 sin catch ni log) |
+| Frontend                | estáticos de `web/`                                                         | los mismos, servidos por Vercel; `landing/` pública                                                                                                                                                        |
 
 La **lógica pura** de `directory/store.ts` (`supplierKey`, `mergeSuppliers`,
 `directorySchema`) corre en **ambos** entries; lo que cambia es la persistencia
@@ -92,7 +92,7 @@ fallo de conexión del SDK; **502** con mensaje genérico para el resto. El
   - `parse.ts` — `extractText` (bloques → texto) y `parseJsonObject` (tolera
     prosa/fences alrededor del JSON).
 - `src/sourcing/supplierSource.ts` — `createSupplierSource({ client, localidad?,
-  searchBudget? })`:
+searchBudget? })`:
   - `search()` — fan-out de variantes de query (`buildQueryVariants`, 3 por
     default) en paralelo con `Promise.allSettled`: una variante que falla no
     tumba a las demás; unión deduplicada por `supplierKey`. Contexto de
@@ -100,7 +100,10 @@ fallo de conexión del SDK; **502** con mensaje genérico para el resto. El
   - `enrichContact()` — visita la web del proveedor (`web_fetch` + `web_search`
     de respaldo) y devuelve SOLO campos de contacto faltantes. Respeta el
     `searchBudget` (`maxTokens`/`effort`). Contexto: `sourcing_enrich_contact`.
-  - `SearchBudget` — `{ maxWebSearchUses, maxTokens, maxVariants?, effort? }`.
+  - `SearchBudget` — `{ maxWebSearchUses, maxTokens, maxVariants?, effort?,
+timeoutMs? }`. Con `timeoutMs`, cada llamada se corta al vencer (el SDK
+    lanza `APIConnectionTimeoutError` y no reintenta): las variantes que sí
+    terminaron se devuelven igual; si vencen todas, el server responde 503.
 - `src/sourcing/supplierSchema.ts` — `parseSuppliers` (respuesta del modelo →
   `SupplierCandidate[]`, parseo defensivo por item).
 - `src/directory/store.ts` — `supplierKey` (identidad por dominio del sitio, o
@@ -132,19 +135,19 @@ fallo de conexión del SDK; **502** con mensaje genérico para el resto. El
 
 ### Rutas de la API
 
-| Ruta | Auth | Notas |
-|---|---|---|
-| `POST /api/login` | — | rate limit 5/15 min por IP |
-| `GET /api/health` | pública | liveness |
-| `GET /api/publico` | pública | directorio publicado (landing) |
-| `GET /api/directorio` | cookie | directorio + mejor opción |
-| `GET /api/directorio.csv` | cookie | export CSV (12 columnas en español) |
-| `POST /api/buscar` | cookie | sourcing + merge + ranking; rate limit 10/h |
-| `PATCH /api/proveedor/:key` | cookie | `status` / `notes` / `favorite` |
-| `DELETE /api/proveedor/:key` | cookie | eliminar del directorio |
-| `GET /api/proveedor/:key/cotizacion` | cookie | mensaje de cotización |
-| `POST /api/proveedor/:key/enriquecer` | cookie | completar contacto; rate limit 10/h |
-| `POST /api/publicar` | cookie | publica el directorio a la landing |
+| Ruta                                  | Auth    | Notas                                       |
+| ------------------------------------- | ------- | ------------------------------------------- |
+| `POST /api/login`                     | —       | rate limit 5/15 min por IP                  |
+| `GET /api/health`                     | pública | liveness                                    |
+| `GET /api/publico`                    | pública | directorio publicado (landing)              |
+| `GET /api/directorio`                 | cookie  | directorio + mejor opción                   |
+| `GET /api/directorio.csv`             | cookie  | export CSV (12 columnas en español)         |
+| `POST /api/buscar`                    | cookie  | sourcing + merge + ranking; rate limit 10/h |
+| `PATCH /api/proveedor/:key`           | cookie  | `status` / `notes` / `favorite`             |
+| `DELETE /api/proveedor/:key`          | cookie  | eliminar del directorio                     |
+| `GET /api/proveedor/:key/cotizacion`  | cookie  | mensaje de cotización                       |
+| `POST /api/proveedor/:key/enriquecer` | cookie  | completar contacto; rate limit 10/h         |
+| `POST /api/publicar`                  | cookie  | publica el directorio a la landing          |
 
 ### Ranking del mejor proveedor (por niveles)
 

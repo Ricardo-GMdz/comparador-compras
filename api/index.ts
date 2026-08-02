@@ -17,11 +17,17 @@ export const maxDuration = 60;
 // Presupuesto acotado para caber en 60 s (afinable midiendo en producción).
 // maxVariants 2: el fan-out por defecto es 3 llamadas paralelas al modelo; con
 // 2 se recorta ~33% del costo por búsqueda y el dedupe absorbe el solape.
+// timeoutMs 45s: sin deadline propio, una llamada lenta (web_search puede
+// tardar minutos, medido 2026-08-02) cuelga la función hasta el kill de Vercel
+// a los 60 s → 504 sin catch, sin log y sin telemetría. Con él, la variante
+// lenta se corta, search() degrada parcial (devuelve las que terminaron) y si
+// TODAS vencen el server responde 503 "saturado" con log del detalle.
 const VERCEL_SEARCH_BUDGET: SearchBudget = {
   maxWebSearchUses: 2,
   maxTokens: 8000,
   effort: "low",
   maxVariants: 2,
+  timeoutMs: 45_000,
 };
 
 const env = loadVercelEnv();
