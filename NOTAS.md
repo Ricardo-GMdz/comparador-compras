@@ -12,4 +12,3 @@ y borra de aquí lo que ya procesó.
      upgrade). Todo lo pedido se construyó: la comparación retail + upgrade fue
      el CLI v1 (archivado en el tag legacy-cli-v1) y la validación de
      proveedores con mejor opción es la app v2 en producción. -->
-

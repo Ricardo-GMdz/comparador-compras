@@ -55,6 +55,13 @@ export interface SearchBudget {
    * NO soporta thinking "enabled" con budget. Si se omite, no se acota el effort.
    */
   effort?: "low" | "medium" | "high";
+  /**
+   * Deadline duro por llamada al modelo, en ms. Cada variante del fan-out y el
+   * enriquecimiento se cortan al vencer (el SDK lanza y `search()` degrada
+   * parcial: devuelve las variantes que sí terminaron). Sin él, el SDK espera
+   * hasta ~10 min por llamada — inviable bajo el límite de 60 s de Vercel.
+   */
+  timeoutMs?: number;
 }
 
 /** Dependencias: el cliente Anthropic (inyectable para tests). */
@@ -179,6 +186,9 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
   const maxVariants = deps.searchBudget?.maxVariants ?? MAX_VARIANTS;
   const maxTokens = deps.searchBudget?.maxTokens ?? MAX_TOKENS;
   const effort = deps.searchBudget?.effort;
+  const timeoutMs = deps.searchBudget?.timeoutMs;
+  // Deadline por llamada (undefined = sin límite, comportamiento local).
+  const callOptions = timeoutMs !== undefined ? { timeoutMs } : undefined;
 
   async function searchOnce(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
     const response = await callModel(
@@ -196,6 +206,7 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
         messages: [{ role: "user", content: buildUserPrompt(q, deps.localidad) }],
       },
       { action: "sourcing_search", query: q.query, region: q.region },
+      callOptions,
     );
 
     const text = extractText(response.content);
@@ -274,6 +285,7 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
         messages: [{ role: "user", content: buildEnrichUserPrompt(supplier) }],
       },
       { action: "sourcing_enrich_contact", supplier: supplier.name, website: supplier.website },
+      callOptions,
     );
 
     const text = extractText(response.content);

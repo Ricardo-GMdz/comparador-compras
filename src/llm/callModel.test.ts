@@ -99,6 +99,26 @@ describe("callModel", () => {
     );
   });
 
+  it("con timeoutMs pasa timeout al SDK y desactiva sus reintentos", async () => {
+    // El SDK reintenta timeouts (wall-clock = timeout × (reintentos+1)); con un
+    // deadline duro no hay lugar para reintentos: maxRetries debe ir en 0.
+    const { client, create } = fakeClient(BASE_RESPONSE);
+    vi.spyOn(logger, "info").mockImplementation(() => undefined);
+
+    await callModel(client, PARAMS, { action: "buscar" }, { timeoutMs: 45_000 });
+
+    expect(create).toHaveBeenCalledWith(PARAMS, { timeout: 45_000, maxRetries: 0 });
+  });
+
+  it("sin timeoutMs llama al SDK sin opciones de request (comportamiento actual intacto)", async () => {
+    const { client, create } = fakeClient(BASE_RESPONSE);
+    vi.spyOn(logger, "info").mockImplementation(() => undefined);
+
+    await callModel(client, PARAMS, { action: "buscar" });
+
+    expect(create.mock.calls[0]).toHaveLength(1);
+  });
+
   it("no rompe la llamada si la respuesta viene sin usage (la telemetría nunca tumba el negocio)", async () => {
     const withoutUsage = { stop_reason: "end_turn", content: [{ type: "text", text: "ok" }] };
     const { client } = fakeClient(withoutUsage);

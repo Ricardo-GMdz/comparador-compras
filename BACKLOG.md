@@ -12,7 +12,10 @@ Al terminar, la tarea se marca `[x]` y se mueve a "Hechas".
 
 - [ ] [auto] Verificar en los logs de producción que `llm_usage` aparece con
       costos plausibles tras las primeras búsquedas reales (cierre del plan de
-      prueba de #21)
+      prueba de #21). Nota 2026-08-02: verificada la emisión con búsqueda real
+      por el path compilado (costo cuadró al centavo: $0,2449); en prod quedó
+      bloqueada por el 504 → destrabada por el fix de timeout; falta solo
+      re-mirar los logs de Vercel con la API a latencia normal
 - [ ] [auto] Atar la tabla de precios de `src/llm/pricing.ts` a la constante
       `MODEL`: hoy los precios son de `claude-opus-4-8` hardcodeados y un cambio
       de modelo dejaría la estimación silenciosamente inválida (riesgo conocido
@@ -23,8 +26,10 @@ Al terminar, la tarea se marca `[x]` y se mueve a "Hechas".
 - [ ] [review] Fase 3 del plan (optimización de modelo, GATED: recién tras 1–2
       semanas de telemetría en producción): `claude-opus-5` drop-in → structured
       outputs → Sonnet 5 en el fan-out (`SEARCH_MODEL` separada) → Haiku/Sonnet
-      en enrich → timeout propio con degradación parcial. Orden y detalles en
-      `docs/PLAN-2026-07-29.md` §Fase 3
+      en enrich. El "timeout propio con degradación parcial" ya salió de esta
+      fase: se adelantó el 2026-08-02 porque producción daba 504 (la latencia
+      real de web_search+Opus medida fue de minutos, no los ~15-40 s estimados).
+      Orden y detalles en `docs/PLAN-2026-07-29.md` §Fase 3
 - [ ] [review] Fase 4 del plan (tests de la ruta real): coverage ejecutable
       (`@vitest/coverage-v8` o borrar la config muerta), test del entry
       `api/index.ts` (armado de deps extraído a función), smoke E2E con el
