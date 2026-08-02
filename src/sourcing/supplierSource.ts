@@ -5,6 +5,8 @@ import { z } from "zod";
 import type { Supplier, SupplierCandidate, SupplierContact } from "../domain/supplier.js";
 import { supplierKey } from "../directory/store.js";
 import { logger } from "../logging/logger.js";
+import { callModel } from "../llm/callModel.js";
+import { extractText, parseJsonObject } from "../llm/parse.js";
 import { parseSuppliers } from "./supplierSchema.js";
 
 const MODEL = "claude-opus-4-8";
@@ -170,29 +172,6 @@ function onlyMissingContactFields(
   return Object.fromEntries(entries) as SupplierContact;
 }
 
-function extractText(content: Anthropic.Messages.ContentBlock[]): string {
-  return content
-    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
-}
-
-/** Recorta el objeto JSON del texto si el modelo lo envuelve en prosa. */
-function parseJsonObject(text: string): unknown {
-  const trimmed = text.trim();
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1));
-    }
-    throw new Error("La respuesta del modelo no contiene un objeto JSON válido.");
-  }
-}
-
 /** Crea una fuente de proveedores que usa web_search. */
 export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
   // Valores efectivos: si hay searchBudget se acotan, si no se usan los defaults.
@@ -202,18 +181,22 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
   const effort = deps.searchBudget?.effort;
 
   async function searchOnce(q: SupplierQuery): Promise<readonly SupplierCandidate[]> {
-    const response = await deps.client.messages.create({
-      model: MODEL,
-      max_tokens: maxTokens,
-      // Este modelo usa thinking "adaptive"; el esfuerzo se acota con output_config.effort.
-      thinking: { type: "adaptive" },
-      ...(effort !== undefined ? { output_config: { effort } } : {}),
-      system: buildSystemPrompt(),
-      tools: [
-        { type: WEB_SEARCH_TOOL_TYPE, name: WEB_SEARCH_TOOL_NAME, max_uses: maxWebSearchUses },
-      ],
-      messages: [{ role: "user", content: buildUserPrompt(q, deps.localidad) }],
-    });
+    const response = await callModel(
+      deps.client,
+      {
+        model: MODEL,
+        max_tokens: maxTokens,
+        // Este modelo usa thinking "adaptive"; el esfuerzo se acota con output_config.effort.
+        thinking: { type: "adaptive" },
+        ...(effort !== undefined ? { output_config: { effort } } : {}),
+        system: buildSystemPrompt(),
+        tools: [
+          { type: WEB_SEARCH_TOOL_TYPE, name: WEB_SEARCH_TOOL_NAME, max_uses: maxWebSearchUses },
+        ],
+        messages: [{ role: "user", content: buildUserPrompt(q, deps.localidad) }],
+      },
+      { action: "sourcing_search", query: q.query, region: q.region },
+    );
 
     const text = extractText(response.content);
     if (text.length === 0) {
@@ -272,22 +255,26 @@ export function createSupplierSource(deps: SupplierSourceDeps): SupplierSource {
       return {};
     }
 
-    const response = await deps.client.messages.create({
-      model: MODEL,
-      max_tokens: maxTokens,
-      thinking: { type: "adaptive" },
-      ...(effort !== undefined ? { output_config: { effort } } : {}),
-      system: buildEnrichSystemPrompt(),
-      tools: [
-        { type: WEB_FETCH_TOOL_TYPE, name: WEB_FETCH_TOOL_NAME, max_uses: MAX_WEB_FETCH_USES },
-        {
-          type: WEB_SEARCH_TOOL_TYPE,
-          name: WEB_SEARCH_TOOL_NAME,
-          max_uses: MAX_ENRICH_SEARCH_USES,
-        },
-      ],
-      messages: [{ role: "user", content: buildEnrichUserPrompt(supplier) }],
-    });
+    const response = await callModel(
+      deps.client,
+      {
+        model: MODEL,
+        max_tokens: maxTokens,
+        thinking: { type: "adaptive" },
+        ...(effort !== undefined ? { output_config: { effort } } : {}),
+        system: buildEnrichSystemPrompt(),
+        tools: [
+          { type: WEB_FETCH_TOOL_TYPE, name: WEB_FETCH_TOOL_NAME, max_uses: MAX_WEB_FETCH_USES },
+          {
+            type: WEB_SEARCH_TOOL_TYPE,
+            name: WEB_SEARCH_TOOL_NAME,
+            max_uses: MAX_ENRICH_SEARCH_USES,
+          },
+        ],
+        messages: [{ role: "user", content: buildEnrichUserPrompt(supplier) }],
+      },
+      { action: "sourcing_enrich_contact", supplier: supplier.name, website: supplier.website },
+    );
 
     const text = extractText(response.content);
     if (text.length === 0) {
