@@ -1,18 +1,10 @@
 {
   "name": "comparador-compras",
   "version": "0.1.0",
-  "description": "CLI agente que busca productos en internet, compara precios entre proveedores y recomienda la mejor opción",
+  "description": "App de sourcing de proveedores B2B: agente con web_search/web_fetch que busca proveedores, arma un directorio y sugiere la mejor opción",
   "type": "module",
   "license": "MIT",
-  "bin": {
-    "comparar": "dist/index.js"
-  },
-  "exports": {
-    ".": "./dist/index.js"
-  },
-  "files": [
-    "dist"
-  ],
+  "private": true,
   "engines": {
     "node": ">=20"
   },
@@ -32,7 +24,6 @@
     "@anthropic-ai/sdk": "^0.105.0",
     "@hono/node-server": "^2.0.8",
     "@upstash/redis": "^1.38.0",
-    "commander": "^14.0.1",
     "hono": "^4.12.27",
     "zod": "^4.1.13"
   },
