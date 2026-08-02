@@ -38,12 +38,16 @@ export async function callModel(
   const usage = response.usage as Anthropic.Messages.Usage | undefined;
   const inputTokens = usage?.input_tokens ?? 0;
   const outputTokens = usage?.output_tokens ?? 0;
+  const cacheCreationTokens = usage?.cache_creation_input_tokens ?? 0;
+  const cacheReadTokens = usage?.cache_read_input_tokens ?? 0;
   const webSearchRequests = usage?.server_tool_use?.web_search_requests ?? 0;
   const webFetchRequests = usage?.server_tool_use?.web_fetch_requests ?? 0;
   const estimatedCostUsd = estimateCostUsd({
     inputTokens,
     outputTokens,
     webSearchRequests,
+    cacheCreationTokens,
+    cacheReadTokens,
   });
 
   logger.info("llm_usage", {
@@ -52,8 +56,8 @@ export async function callModel(
     stopReason: response.stop_reason,
     inputTokens,
     outputTokens,
-    cacheCreationInputTokens: usage?.cache_creation_input_tokens ?? null,
-    cacheReadInputTokens: usage?.cache_read_input_tokens ?? null,
+    cacheCreationInputTokens: cacheCreationTokens,
+    cacheReadInputTokens: cacheReadTokens,
     webSearchRequests,
     webFetchRequests,
     estimatedCostUsd: Number(estimatedCostUsd.toFixed(4)),

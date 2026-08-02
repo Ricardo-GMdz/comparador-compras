@@ -31,4 +31,45 @@ describe("estimateCostUsd", () => {
     });
     expect(cost).toBeCloseTo(0.1175, 5);
   });
+
+  // input_tokens NO incluye los tokens cacheados: el total de entrada es
+  // input_tokens + cache_creation + cache_read. Si no se suman aparte, el costo
+  // queda SUBestimado en cuanto se active el prompt caching.
+  it("cobra la escritura de caché a 1,25× el precio de input", () => {
+    // 1_000_000 tokens escritos a caché = $5 × 1,25 = $6,25
+    const cost = estimateCostUsd({
+      inputTokens: 0,
+      outputTokens: 0,
+      webSearchRequests: 0,
+      cacheCreationTokens: 1_000_000,
+    });
+    expect(cost).toBeCloseTo(6.25, 5);
+  });
+
+  it("cobra la lectura de caché a 0,1× el precio de input", () => {
+    // 1_000_000 tokens leídos de caché = $5 × 0,1 = $0,50
+    const cost = estimateCostUsd({
+      inputTokens: 0,
+      outputTokens: 0,
+      webSearchRequests: 0,
+      cacheReadTokens: 1_000_000,
+    });
+    expect(cost).toBeCloseTo(0.5, 5);
+  });
+
+  it("los tokens de caché son opcionales: omitirlos equivale a cero", () => {
+    const sinCache = estimateCostUsd({
+      inputTokens: 12_000,
+      outputTokens: 1_500,
+      webSearchRequests: 2,
+    });
+    const conCacheEnCero = estimateCostUsd({
+      inputTokens: 12_000,
+      outputTokens: 1_500,
+      webSearchRequests: 2,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+    });
+    expect(sinCache).toBe(conCacheEnCero);
+  });
 });
