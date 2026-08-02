@@ -300,6 +300,36 @@ describe("createSupplierSource", () => {
       expect(create).not.toHaveBeenCalled();
       expect(contact).toEqual({});
     });
+
+    it("registra la telemetría de uso con el proveedor y su web como contexto", async () => {
+      const info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+      const { client } = fakeClientSequence([CONTACT_RESPONSE]);
+      const source = createSupplierSource({ client });
+
+      await source.enrichContact(makeSupplier());
+
+      expect(info).toHaveBeenCalledWith(
+        "llm_usage",
+        expect.objectContaining({
+          action: "sourcing_enrich_contact",
+          supplier: "Aceros del Norte",
+          website: "https://aceros.mx",
+          inputTokens: 1000,
+          outputTokens: 200,
+        }),
+      );
+    });
+
+    it("no emite telemetría cuando no hay website (no hubo llamada que medir)", async () => {
+      const info = vi.spyOn(logger, "info").mockImplementation(() => undefined);
+      const { client } = fakeClientSequence([CONTACT_RESPONSE]);
+      const source = createSupplierSource({ client });
+
+      await source.enrichContact(makeSupplier({ website: undefined }));
+
+      const usageLogs = info.mock.calls.filter(([event]) => event === "llm_usage");
+      expect(usageLogs).toHaveLength(0);
+    });
   });
 });
 
