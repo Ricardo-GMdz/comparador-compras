@@ -53,6 +53,11 @@ Al terminar, la tarea se marca `[x]` y se mueve a "Hechas".
 
 <!-- el sistema mueve aquí las tareas completadas, con fecha -->
 
+- [x] 2026-08-02 — fix de timeout por llamada al modelo con degradación parcial
+      (#23): `SearchBudget.timeoutMs` → SDK `{ timeout, maxRetries: 0 }`, Vercel
+      a 45 s/llamada; adelantado de Fase 3 porque producción daba 504 en toda
+      búsqueda. Mergeado y desplegado (deployment `fe5f898`); E2E real con corte
+      exacto a 45,0 s
 - [x] 2026-08-02 — serie de endurecimiento completa (Fases 1–2 de
       `docs/PLAN-2026-07-29.md`) mergeada y verificada: #17 costo acotado
       (fan-out ×2 en Vercel, budget en enrich, topes de entrada), #18 rate

@@ -10,6 +10,21 @@ Bitácora append-only de cada corrida autónoma. Lo más reciente arriba.
 - Verificación: <comando corrido y resultado>
 -->
 
+## 2026-08-02 20:05
+
+- Tarea: cierre del día — merge y deploy del fix de timeout (#23, ver entrada
+  anterior). Verificado post-merge: CI de `main` en verde y el deployment
+  activo de Vercel en Production es exactamente el commit del fix (`fe5f898`),
+  health OK. Con esto, una búsqueda en producción ya no puede morir en 504
+  mudo: completa, degrada parcial, o responde 503 con detalle en el logger.
+  Operativo: el token de Vercel usado para la verificación fue revocado por el
+  usuario al terminar; el re-chequeo de `llm_usage` en los logs de prod (con la
+  API a latencia normal) queda en el backlog y necesitará acceso nuevo.
+- Rama/PR: PR #23 (squash, rama borrada) + `docs/registro-2026-08-02`
+- Resultado: fusionado a `main` y desplegado en producción
+- Verificación: CI verde en `main`; deployment `fe5f898` en Production con
+  `GET /api/health` OK
+
 ## 2026-08-02 19:15
 
 - Tarea: verificación de `llm_usage` con búsqueda real → encontró producción
