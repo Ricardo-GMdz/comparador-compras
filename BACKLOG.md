@@ -10,11 +10,33 @@ Al terminar, la tarea se marca `[x]` y se mueve a "Hechas".
 
 ## Pendientes
 
-- [ ] [review] Playwright E2E si la app crece (hoy alcanza el smoke E2E de la API)
-- [ ] [review] SQLite si el directorio escala (hoy `directorio.json` alcanza)
+- [ ] [auto] Verificar en los logs de producción que `llm_usage` aparece con
+      costos plausibles tras las primeras búsquedas reales (cierre del plan de
+      prueba de #21)
+- [ ] [auto] Atar la tabla de precios de `src/llm/pricing.ts` a la constante
+      `MODEL`: hoy los precios son de `claude-opus-4-8` hardcodeados y un cambio
+      de modelo dejaría la estimación silenciosamente inválida (riesgo conocido
+      documentado en #21)
+- [ ] [review] Contador diario de gasto (`INCR` en Redis) + `GET /api/uso`
+      autenticado — parte del PR-E planificado en `docs/PLAN-2026-07-29.md` que
+      no se envió; hoy la telemetría vive solo en logs
+- [ ] [review] Fase 3 del plan (optimización de modelo, GATED: recién tras 1–2
+      semanas de telemetría en producción): `claude-opus-5` drop-in → structured
+      outputs → Sonnet 5 en el fan-out (`SEARCH_MODEL` separada) → Haiku/Sonnet
+      en enrich → timeout propio con degradación parcial. Orden y detalles en
+      `docs/PLAN-2026-07-29.md` §Fase 3
+- [ ] [review] Fase 4 del plan (tests de la ruta real): coverage ejecutable
+      (`@vitest/coverage-v8` o borrar la config muerta), test del entry
+      `api/index.ts` (armado de deps extraído a función), smoke E2E con el
+      `fakeRedis` de `redisStore.test.ts`, Playwright mínimo
+      (login → buscar → patch)
 - [ ] [auto] Revisar unidad de precio con datos reales (¿el sourcing devuelve
       `priceUnit` consistente? ajustar normalización si aparecen variantes)
-- [ ] [review] Reactivar `mercadoLibreSource` si ML abre la API de búsqueda
+- [ ] [review] SQLite si el directorio escala (hoy Redis en prod y JSON local
+      alcanzan)
+- [ ] [review] Retomar cobertura por API de MercadoLibre si ML abre la API de
+      búsqueda (el adaptador `mercadoLibreSource` fue archivado con el CLI v1;
+      recuperable en el tag `legacy-cli-v1`)
 
 ## Recurrentes (monitoreo — NO se marcan hechas; cada corrida se registra en PROGRESO.md y solo se avisa si algo está mal)
 
@@ -26,6 +48,20 @@ Al terminar, la tarea se marca `[x]` y se mueve a "Hechas".
 
 <!-- el sistema mueve aquí las tareas completadas, con fecha -->
 
+- [x] 2026-08-02 — serie de endurecimiento completa (Fases 1–2 de
+      `docs/PLAN-2026-07-29.md`) mergeada y verificada: #17 costo acotado
+      (fan-out ×2 en Vercel, budget en enrich, topes de entrada), #18 rate
+      limiting (login 5/15min por IP, costosos 10/h), #19 errores sin fuga de
+      `error.message`, #20 CLI v1 archivado (tag `legacy-cli-v1`, −3.900
+      líneas), #21 telemetría de uso/costo del LLM (`src/llm/`); docs
+      actualizados a la realidad (PR-F)
+- [x] 2026-07-18 — v2.4: fan-out de 3 variantes + extracción a campos
+      estructurados (`feat/v2.4-fanout-extraccion`, #16)
+- [x] 2026-07-13 — v2.3: sidebar Inicio/Historial, CSV resumido, identidad
+      "Placa industrial" (#8–#11)
+- [x] 2026-07-12 — v2.2 + producción: catalogPrice/address/detalle/favoritos,
+      deploy Vercel + Upstash Redis, landing pública, auth por ACCESS_KEY
+      (#2–#7)
 - [x] 2026-07-05 — v2.1: gestión del directorio (estado/notas/borrar/filtrar),
       modal de cotización con template local, ranking por unidad de precio
       dominante, enriquecer contacto por proveedor, export CSV, smoke E2E

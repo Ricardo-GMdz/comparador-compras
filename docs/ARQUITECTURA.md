@@ -1,21 +1,16 @@
 # Arquitectura — comparador-compras
 
-El proyecto tiene dos capacidades:
+App web de **sourcing de proveedores B2B**: dada una búsqueda (producto/material
++ región), un agente con `web_search`/`web_fetch` encuentra **proveedores**,
+reúne sus **datos de contacto**, los acumula en un **directorio persistente** y
+recomienda la **mejor opción** de compra.
 
-- **v2 — Sourcing de proveedores (foco actual):** app web local que, dada una
-  búsqueda (producto/material + región), encuentra **proveedores B2B**, reúne sus
-  **datos de contacto**, los acumula en un **directorio persistente** y recomienda
-  la **mejor opción**. En implementación según
-  `docs/superpowers/plans/2026-07-01-sourcing-proveedores.md`.
-- **v1 — Comparación de retail (motor de fondo, reusado):** CLI que compara
-  **ofertas de retail** de un producto (mejor opción, upgrade por variante,
-  condición nuevo/reacondicionado, outliers, dedup multi-fuente). Su motor
-  (cliente Claude + `web_search`, parseo defensivo con zod, ranking, outliers) se
-  reusa en el v2.
-
-> Nota externa: la API de búsqueda de MercadoLibre está **cerrada** para apps
-> generales (403 aun con token OAuth válido). La cobertura de ML se logra vía
-> `web_search`. Existe un adaptador `mercadoLibreSource` opt-in deshabilitado.
+> **Historia:** el proyecto nació como CLI de comparación de precios retail
+> (v1). Ese CLI fue **archivado el 2026-08-02** (PR #20) — recuperable en el tag
+> `legacy-cli-v1` — cuando quedó claro que el producto real es la app de
+> sourcing. La cobertura de MercadoLibre vía adaptador OAuth se archivó con él
+> (la API de búsqueda de ML está cerrada para apps generales; la cobertura de ML
+> se logra vía `web_search`).
 
 ## Principios
 
@@ -29,119 +24,127 @@ El proyecto tiene dos capacidades:
   `PascalCase` (tipos/interfaces), `UPPER_SNAKE_CASE` (constantes). Identificadores
   en inglés; comentarios en español.
 - **TDD**: test primero (rojo) → implementación mínima (verde) → refactor.
+- **La telemetría nunca tumba el negocio**: instrumentación defensiva; un fallo
+  de logging no puede perder una búsqueda ya respondida.
 
 ## Stack
 
 - TypeScript + Node, ESM (`"type": "module"`), package manager `pnpm`.
 - Tooling: `vitest` (tests), `eslint` + `prettier`, `tsconfig` strict, CI en
   GitHub Actions (lint + typecheck + test).
-- SDK: `@anthropic-ai/sdk`, modelo `claude-opus-4-8`, adaptive thinking; server
-  tool `web_search` (`"web_search_20260209"`).
-- Config de entorno con `zod` (`ANTHROPIC_API_KEY`); carga de `.env` nativa
-  (`process.loadEnvFile`).
-- **v2:** servidor **Hono** (+ `@hono/node-server`) sirve la API JSON y el
-  frontend estático (**HTML/CSS/JS vanilla**). Store en **`directorio.json`**
-  (gitignoreado). **v1:** CLI con `commander`.
+- SDK: `@anthropic-ai/sdk`, modelo `claude-opus-4-8`, adaptive thinking
+  (+ `output_config.effort` cuando hay presupuesto); server tools
+  `web_search_20260209` y `web_fetch_20260209`.
+- Servidor **Hono**. Local: `@hono/node-server` sirve API + frontend estático
+  (**HTML/CSS/JS vanilla**). Producción: **Vercel** (función serverless única).
+- Persistencia: **Upstash Redis** en producción (`@upstash/redis`);
+  `directorio.json` (gitignoreado) solo en dev local.
+- Rate limiting: `@upstash/ratelimit` sobre el mismo Redis.
+- Config de entorno con `zod`; carga de `.env` nativa (`process.loadEnvFile`).
 
-## v2 — Sourcing de proveedores
+## Los dos entries
 
-### v2.1 — gestión del directorio y cotización
+| | Local (`src/server/index.ts`) | Producción (`api/index.ts`, Vercel) |
+|---|---|---|
+| Store | `directorio.json` (`loadDirectory`/`saveDirectory`, escritura atómica) | Redis Upstash (`createRedisStore`) |
+| Auth | sin auth | `ACCESS_KEY` + cookie (`src/server/auth.ts`) |
+| Rate limit | no | login 5/15 min por IP; buscar+enriquecer 10/h global |
+| Presupuesto de búsqueda | sin recortes (defaults: 5 búsquedas, 16K tokens, 3 variantes) | `VERCEL_SEARCH_BUDGET`: 2 búsquedas, 8K tokens, effort low, 2 variantes (límite de 60 s del plan Hobby) |
+| Frontend | estáticos de `web/` | los mismos, servidos por Vercel; `landing/` pública |
 
-Sobre la base del v2, la v2.1 convierte el directorio en herramienta de trabajo:
-cada proveedor tiene **estado** (`pendiente` → `contactado` → `cotizó` /
-`descartado`) y **notas** editables desde la tabla; los `descartado` siguen
-visibles pero **nunca** compiten como mejor opción. El sourcing extrae la
-**unidad del precio** (`priceUnit`: pieza/kg/tonelada/m2) y el ranking solo
-compara precios dentro de la **unidad dominante** (espejo de `dominantCurrency`
-del v1). Un modal de **cotización** genera un mensaje copiable (template local
-`buildQuoteMessage`, con link directo a WhatsApp si hay número), el botón
-**Completar** enriquece el contacto de un proveedor puntual (agente con
-`web_fetch` sobre su sitio, solo campos faltantes) y el directorio se exporta a
-**CSV**. Los proveedores persistidos sin `status` migran a `"pendiente"` al leer.
+La **lógica pura** de `directory/store.ts` (`supplierKey`, `mergeSuppliers`,
+`directorySchema`) corre en **ambos** entries; lo que cambia es la persistencia
+(archivo vs Redis).
 
-### v2.2 — análisis, detalle y favoritos
-
-El sourcing extrae dos datos más cuando el proveedor los publica: **precio de
-catálogo** (`catalogPrice`, precio de lista/unitario, distinto del `wholesalePrice`
-de mayoreo — resuelve el caso de instrumentos que no publican mayoreo) y
-**dirección** (`address`, ciudad/domicilio). Clickear el **nombre** de un proveedor
-abre un **modal de detalle** con todo (precios mayoreo/catálogo, MOQ, stock,
-dirección, contacto, notas, y "Envío: se consulta en la cotización" — el envío no
-se auto-completa). Cada proveedor puede marcarse como **favorito** (`favorite`,
-gestión manual como `status`/`notes`: el sourcing no lo pisa y **nunca** se publica
-en la landing). La barra suma **orden** (precio efectivo = mayoreo ?? catálogo /
-favoritos / nombre / reciente) y filtro **"solo favoritos"** (client-side). El CSV
-suma `catalogPrice`, `address`, `favorite`; el directorio público suma
-`catalogPrice`/`address` (no `favorite`).
-
-### v2.3 — navegación con sidebar y CSV resumido
-
-**Identidad visual — "Placa industrial"** (`web/styles.css`): sistema de diseño
-deliberado para una cabina de compras B2B. Rail de **grafito** (`#1a1d21`) +
-superficie **papel**, acento **latón** (`#b8862b`) para precios/CTA, **verdigrís**
-(`#3f7a6d`) para "confiable"/stock y **óxido** para descartado/error. Tipografía
-**IBM Plex Sans** (UI) + **IBM Plex Mono** (datos, etiquetas y precios en
-numerales tabulares, como lectura de instrumento). Firma: la **mejor opción** se
-muestra como una **placa estampada** (eyebrow mono, sello verdigrís "✓ Confiable",
-precio grande en latón). Todo el color y la tipografía se derivan de tokens CSS.
-
-El frontend se reorganiza con un **sidebar**: **Inicio** (el buscador, los
-resultados de la última búsqueda y un vistazo a los favoritos) e **Historial**
-(el directorio completo con
-filtro/orden/estados/acciones/CSV/Publicar). Es navegación client-side pura
-(`mostrarVista` togglea `#vista-inicio`/`#vista-historial`, sin router); el
-estado en memoria se comparte y la sección de favoritos reusa `renderTable`
-(parametrizada por contenedor) con los mismos handlers de fila. El **CSV** pasa a
-un resumen legible en español de 12 columnas (Proveedor, Sitio web, Material,
-Región, **Precio** [efectivo: mayoreo ?? catálogo], **Moneda**, Email, WhatsApp,
-Teléfono, **Dirección**, Estado, Favorito); se quitan las columnas internas
-(priceUnit, moq, formUrl, trusted, notes, timestamps).
-
-### Flujo end-to-end
+## Flujo end-to-end (producción)
 
 ```
-navegador  Buscar(producto/material, región)
-  -> POST /api/buscar
-       -> createSupplierSource(...).search({ query, region })   (Claude + web_search)
-       -> parseSuppliers(...)                                    (zod, defensivo)
-       -> loadDirectory(directorio.json)
-       -> mergeSuppliers(existentes, nuevos, now)                (merge por identidad)
-       -> saveDirectory(...)                                     (escritura atómica)
-       -> rankSuppliers / selectBestSupplier                     (niveles + outliers)
-  <- { suppliers, mejorOpcion, nuevos, total }
-navegador  <- pinta mejor opción destacada + tabla del directorio
+navegador  Buscar(producto/material, región)          [cookie de sesión]
+  -> POST /api/buscar                                  [rate limit 10/h]
+       -> zod: query ≤200 chars, region ≤60
+       -> createSupplierSource(...).search()           (fan-out de variantes en
+          paralelo; Claude + web_search; cada llamada pasa por callModel, que
+          loguea llm_usage: tokens, server tools, costo estimado)
+       -> parseSuppliers(...)                          (zod, defensivo por item)
+       -> store.load() -> mergeSuppliers -> store.save()   (Redis)
+       -> rankSuppliers / selectBestSupplier           (niveles + outliers)
+  <- { ok, suppliers, mejorOpcion, encontrados, nuevos, total }
+     (encontrados = hallados en ESTA búsqueda; el front los destaca en Inicio)
 ```
 
-### Módulos y contratos (v2)
+Errores del sourcing: **503** "servicio saturado, reintentá" para 429/5xx o
+fallo de conexión del SDK; **502** con mensaje genérico para el resto. El
+`error.message` crudo va **solo al logger**, nunca al cliente.
 
-- `src/domain/supplier.ts` — `SupplierContact`, `SupplierCandidate` (lo que produce
-  el sourcing) y `Supplier` (candidate + `firstSeen`/`lastSeen`).
-- `src/directory/store.ts` — `supplierKey` (identidad por dominio del sitio, o
-  nombre+región), `mergeSuppliers` (merge inmutable con timestamps), `loadDirectory`
-  / `saveDirectory` (persistencia JSON validada con zod, escritura atómica).
+## Módulos y contratos
+
+- `src/domain/supplier.ts` — `SupplierContact`, `SupplierCandidate` (lo que
+  produce el sourcing) y `Supplier` (candidate + `firstSeen`/`lastSeen` +
+  `status`/`notes`/`favorite`).
+- `src/llm/` — capa de acceso al modelo:
+  - `callModel.ts` — único wrapper sobre `messages.create`; en éxito emite
+    `llm_usage` (tokens, caché, requests de server tools, costo estimado) con el
+    contexto de negocio (`action`, query/supplier/...). Lectura defensiva de
+    `usage`; en error propaga sin loguear usage (lo loguea el caller).
+  - `pricing.ts` — estimación de costo: input/output a precios de
+    `claude-opus-4-8` ($5/$25 por MTok), caché a 1,25× (escritura) y 0,1×
+    (lectura), fee de `web_search` ($0,01/uso). Es aproximación, no factura.
+  - `parse.ts` — `extractText` (bloques → texto) y `parseJsonObject` (tolera
+    prosa/fences alrededor del JSON).
+- `src/sourcing/supplierSource.ts` — `createSupplierSource({ client, localidad?,
+  searchBudget? })`:
+  - `search()` — fan-out de variantes de query (`buildQueryVariants`, 3 por
+    default) en paralelo con `Promise.allSettled`: una variante que falla no
+    tumba a las demás; unión deduplicada por `supplierKey`. Contexto de
+    telemetría: `sourcing_search`.
+  - `enrichContact()` — visita la web del proveedor (`web_fetch` + `web_search`
+    de respaldo) y devuelve SOLO campos de contacto faltantes. Respeta el
+    `searchBudget` (`maxTokens`/`effort`). Contexto: `sourcing_enrich_contact`.
+  - `SearchBudget` — `{ maxWebSearchUses, maxTokens, maxVariants?, effort? }`.
 - `src/sourcing/supplierSchema.ts` — `parseSuppliers` (respuesta del modelo →
   `SupplierCandidate[]`, parseo defensivo por item).
-- `src/sourcing/supplierSource.ts` — `createSupplierSource({ client })` (agente
-  `web_search` orientado a proveedores B2B + extracción de contacto).
+- `src/directory/store.ts` — `supplierKey` (identidad por dominio del sitio, o
+  nombre+región), `mergeSuppliers` (merge inmutable con timestamps),
+  `loadDirectory`/`saveDirectory` (JSON local, escritura atómica).
+- `src/directory/redisStore.ts` — `createRedisStore` (persistencia en Upstash
+  para producción, mismo contrato de store).
+- `src/directory/publicDirectory.ts` — proyección pública del directorio (lo que
+  consume la landing; sin `favorite` ni campos internos).
 - `src/ranking/rankSuppliers.ts` — `rankSuppliers` (orden) y `selectBestSupplier`
-  (mejor por niveles: confiable + región + menor precio de mayoreo; descarta
-  outliers). El MOQ es dato, no ordena.
-- `src/quotes/quoteTemplate.ts` — `buildQuoteMessage` (mensaje de pedido de
-  cotización en español, función pura).
-- `src/server/api.ts` — `buildApi(deps)` → app Hono (dependencias inyectables
-  para test) con:
-  - `POST /api/buscar` — sourcing + merge + ranking;
-  - `GET /api/directorio` — directorio completo + mejor opción;
-  - `GET /api/directorio.csv` — export CSV del directorio;
-  - `PATCH /api/proveedor/:key` — actualizar `status` / `notes`;
-  - `DELETE /api/proveedor/:key` — eliminar del directorio;
-  - `GET /api/proveedor/:key/cotizacion?quantity=..&spec=..` — mensaje de
-    cotización generado con `buildQuoteMessage`;
-  - `POST /api/proveedor/:key/enriquecer` — completar contacto vía
-    `enrichContact` (solo campos faltantes; lo existente gana).
-- `src/server/index.ts` — entry: arma dependencias reales (cliente Anthropic desde
-  env, funciones de store) y sirve API + estáticos de `web/`.
-- `web/` — `index.html`, `styles.css`, `app.js` (la interfaz aprobada, vanilla).
+  (mejor por niveles; descarta outliers de precio; el MOQ es dato, no ordena).
+- `src/quotes/quoteTemplate.ts` — `buildQuoteMessage` (mensaje de cotización en
+  español, función pura).
+- `src/server/auth.ts` — login por `ACCESS_KEY` (comparación timing-safe) y
+  cookie de sesión.
+- `src/server/api.ts` — `buildApi(deps)` → app Hono con deps inyectables
+  (`store`, `source`, `auth?`, `rateLimit?`). El rate limit es **fail-open**: si
+  Redis falla, el request se permite y se loguea (un Redis caído ya degrada la
+  app; no debe además bloquear al dueño).
+- `src/server/index.ts` — entry local. `api/index.ts` — entry Vercel
+  (`maxDuration: 60`).
+- `src/config/` — `env.ts` (`ANTHROPIC_API_KEY`, `SOURCING_LOCALIDAD?`),
+  `vercelEnv.ts` (`ACCESS_KEY`, credenciales Upstash `KV_*`/`UPSTASH_*`),
+  `loadDotenv.ts`.
+- `scripts/` — `seed-redis.ts` (siembra el directorio local en Upstash),
+  `repoblar.ts` (re-poblado: baja → busca → mergea → sube).
+- `web/` — frontend vanilla (sidebar Inicio/Historial, tabla, modales, CSV).
+- `landing/` — página pública con el directorio publicado.
+
+### Rutas de la API
+
+| Ruta | Auth | Notas |
+|---|---|---|
+| `POST /api/login` | — | rate limit 5/15 min por IP |
+| `GET /api/health` | pública | liveness |
+| `GET /api/publico` | pública | directorio publicado (landing) |
+| `GET /api/directorio` | cookie | directorio + mejor opción |
+| `GET /api/directorio.csv` | cookie | export CSV (12 columnas en español) |
+| `POST /api/buscar` | cookie | sourcing + merge + ranking; rate limit 10/h |
+| `PATCH /api/proveedor/:key` | cookie | `status` / `notes` / `favorite` |
+| `DELETE /api/proveedor/:key` | cookie | eliminar del directorio |
+| `GET /api/proveedor/:key/cotizacion` | cookie | mensaje de cotización |
+| `POST /api/proveedor/:key/enriquecer` | cookie | completar contacto; rate limit 10/h |
+| `POST /api/publicar` | cookie | publica el directorio a la landing |
 
 ### Ranking del mejor proveedor (por niveles)
 
@@ -154,36 +157,48 @@ Primero se descartan outliers de precio de mayoreo. Luego, en orden:
 
 ### Directorio persistente
 
-`directorio.json` es la fuente de verdad. Cada búsqueda **agrega o actualiza**
-proveedores por identidad (dominio del sitio; si falta, nombre+región), conservando
-`firstSeen` y refrescando `lastSeen`. El contador "N en total · +M nuevos" sale del
-merge.
+En producción la fuente de verdad es **Redis** (Upstash); `directorio.json` es
+solo el store de dev local y el seed inicial. Cada búsqueda **agrega o
+actualiza** proveedores por identidad (dominio del sitio; si falta,
+nombre+región), conservando `firstSeen` y refrescando `lastSeen`. El contador
+"N en total · +M nuevos" sale del merge.
 
-## v1 — Motor de retail (reusado, de fondo)
+## Historial de versiones (resumen)
 
-CLI `comparar "<producto>" --region <code>`. Módulos existentes que se reusan o
-quedan intactos:
+- **v2.1** (2026-07) — gestión del directorio: estados
+  (`pendiente`→`contactado`→`cotizó`/`descartado`), notas, modal de cotización,
+  enriquecer contacto puntual, export CSV, ranking por unidad de precio
+  dominante (`priceUnit`).
+- **v2.2** (2026-07-12) — `catalogPrice` (precio de lista, distinto del mayoreo),
+  `address`, modal de detalle, favoritos, orden y filtro. Deploy en **Vercel**
+  con **Redis** y landing pública.
+- **v2.3** (2026-07-13) — sidebar Inicio/Historial (navegación client-side pura),
+  CSV resumido de 12 columnas, identidad visual **"Placa industrial"** (grafito +
+  latón + verdigrís, IBM Plex, la mejor opción como placa estampada; todo por
+  tokens CSS).
+- **v2.4** (2026-07-18) — fan-out de 3 variantes de búsqueda en paralelo y regla
+  de extracción a campos estructurados (precio/dirección nunca solo en `notes`).
+- **Endurecimiento** (2026-08-02, PRs #17–#21 según `docs/PLAN-2026-07-29.md`) —
+  costo acotado por búsqueda (fan-out ×2 en Vercel, budget en enrich, topes de
+  entrada), rate limiting, errores sin fuga de detalle interno, CLI v1
+  archivado (~3.900 líneas menos), y telemetría de uso/costo del LLM
+  (`src/llm/`).
 
-- `domain/types.ts` (`Offer`, `Provider`, `Product`, `ComparisonResult`).
-- `config/env.ts` (`loadEnv`), `config/loadDotenv.ts`, `logging/logger.ts`.
-- `sources/webSearchSource.ts` (patrón de cliente Claude + `web_search`),
-  `sources/mercadoLibreSource.ts` (opt-in deshabilitado).
-- `compare/index.ts` (`normalizePrice`, `rankOffers`, `compareOffers`: mejor
-  opción, upgrade por `tierRank`, condición, outliers).
-- `agent/runner.ts` (`runComparison`) + `agent/dedupe.ts` (dedup multi-fuente).
-- `cli/index.ts` (`buildProgram`) + `index.ts` (bin).
-
-El logger separa salidas: el **resultado va a stdout**, los **logs a stderr**.
-
-## Diagrama de dependencias (v2, alto nivel)
+## Diagrama de dependencias (alto nivel)
 
 ```
-web/ (index.html, styles.css, app.js)
+web/ (vanilla)                    landing/ (pública)
   └─ fetch → server/api.ts (buildApi)
-       ├─ sourcing/supplierSource.ts (createSupplierSource)
-       │    └─ sourcing/supplierSchema.ts (parseSuppliers) + @anthropic-ai/sdk
-       ├─ directory/store.ts (load/merge/save)
-       └─ ranking/rankSuppliers.ts (rankSuppliers, selectBestSupplier)
-  server/index.ts (entry) → serve(api) + estáticos web/
-  (transversal) domain/supplier.ts, config/env.ts, logging/logger.ts
+       ├─ server/auth.ts (ACCESS_KEY + cookie)          [solo prod]
+       ├─ @upstash/ratelimit (login / costosos)         [solo prod]
+       ├─ sourcing/supplierSource.ts (search / enrichContact)
+       │    ├─ llm/callModel.ts ── llm/pricing.ts       (telemetría llm_usage)
+       │    ├─ llm/parse.ts
+       │    └─ sourcing/supplierSchema.ts + @anthropic-ai/sdk
+       ├─ directory/store.ts (lógica pura: key/merge/schema)
+       │    ├─ JSON local (dev)  |  redisStore.ts (prod)
+       │    └─ publicDirectory.ts (proyección landing)
+       └─ ranking/rankSuppliers.ts
+  server/index.ts (entry local) | api/index.ts (entry Vercel, budget acotado)
+  (transversal) domain/supplier.ts, config/, logging/logger.ts
 ```

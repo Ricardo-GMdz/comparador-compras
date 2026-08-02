@@ -12,3 +12,6 @@ Convención del repo a partir de v2.1:
 4. **Checks antes de pedir review**: typecheck + lint + test verdes (CI corre
    lo mismo). TDD en el desarrollo (test primero).
 5. **Merge**: squash o fast-forward según el caso; borrar la rama al mergear.
+6. **Docs al día**: si el PR cambia comportamiento, la bitácora (`PROGRESO.md`)
+   y `docs/ARQUITECTURA.md` se actualizan en el mismo PR o en uno inmediato —
+   la documentación no puede quedar más de una versión atrás de producción.
