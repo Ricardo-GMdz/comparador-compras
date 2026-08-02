@@ -114,6 +114,91 @@ describe("API", () => {
     expect(res.status).toBe(400);
   });
 
+  it("POST /api/buscar responde 400 si la query excede los 200 caracteres", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi(deps);
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "x".repeat(201), region: "mx" }),
+    });
+    expect(res.status).toBe(400);
+    expect(deps.source.search).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/buscar responde 400 si la region excede los 60 caracteres", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi(deps);
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "lámina", region: "r".repeat(61) }),
+    });
+    expect(res.status).toBe(400);
+    expect(deps.source.search).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/buscar recorta espacios de la query antes de buscar", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi(deps);
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "  lámina  ", region: "mx" }),
+    });
+    expect(res.status).toBe(200);
+    expect(deps.source.search).toHaveBeenCalledWith({ query: "lámina", region: "mx" });
+  });
+
+  it("POST /api/buscar recorta espacios de la region antes de buscar", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi(deps);
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "lámina", region: "  mx  " }),
+    });
+    expect(res.status).toBe(200);
+    expect(deps.source.search).toHaveBeenCalledWith({ query: "lámina", region: "mx" });
+  });
+
+  it("POST /api/buscar responde 400 si la query es solo espacios", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi(deps);
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "   ", region: "mx" }),
+    });
+    expect(res.status).toBe(400);
+    expect(deps.source.search).not.toHaveBeenCalled();
+  });
+
+  it("PATCH /api/proveedor/:key responde 400 si notes excede los 2000 caracteres", async () => {
+    const { deps } = fakeDeps([makeSupplier()]);
+    const app = buildApi(deps);
+    const res = await app.request("/api/proveedor/x", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ notes: "n".repeat(2001) }),
+    });
+    expect(res.status).toBe(400);
+    expect(deps.saveDirectory).not.toHaveBeenCalled();
+  });
+
+  it("GET /api/proveedor/:key/cotizacion responde 400 si quantity o spec exceden los 200 caracteres", async () => {
+    const { deps } = fakeDeps([makeSupplier()]);
+    const app = buildApi(deps);
+    const resQuantity = await app.request(
+      `/api/proveedor/x/cotizacion?quantity=${"9".repeat(201)}&spec=inoxidable`,
+    );
+    expect(resQuantity.status).toBe(400);
+    const resSpec = await app.request(
+      `/api/proveedor/x/cotizacion?quantity=100&spec=${"s".repeat(201)}`,
+    );
+    expect(resSpec.status).toBe(400);
+  });
+
   it("POST /api/buscar responde 502 con envelope de error si el sourcing falla", async () => {
     const { deps } = fakeDeps();
     deps.source.search = vi.fn(async () => {

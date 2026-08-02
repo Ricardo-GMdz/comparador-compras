@@ -1,5 +1,11 @@
 // Tipos de dominio del sourcing de proveedores. Inmutables por convención.
 
+/**
+ * Tope de las notas de un proveedor. Acota el tamaño del directorio persistido:
+ * lo valida la API en escrituras manuales y lo trunca el parseo del sourcing.
+ */
+export const MAX_NOTES_LENGTH = 2000;
+
 /** Estado de gestión de un proveedor dentro del directorio. */
 export type SupplierStatus = "pendiente" | "contactado" | "cotizó" | "descartado";
 

@@ -14,10 +14,13 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // Presupuesto acotado para caber en 60 s (afinable midiendo en producción).
+// maxVariants 2: el fan-out por defecto es 3 llamadas paralelas al modelo; con
+// 2 se recorta ~33% del costo por búsqueda y el dedupe absorbe el solape.
 const VERCEL_SEARCH_BUDGET: SearchBudget = {
   maxWebSearchUses: 2,
   maxTokens: 8000,
   effort: "low",
+  maxVariants: 2,
 };
 
 const env = loadVercelEnv();

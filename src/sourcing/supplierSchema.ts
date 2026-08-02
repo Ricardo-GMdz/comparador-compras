@@ -1,11 +1,12 @@
 // Validación y parseo defensivo de la respuesta del modelo → SupplierCandidate[].
 
 import { z } from "zod";
-import type {
-  Availability,
-  PriceUnit,
-  SupplierCandidate,
-  SupplierContact,
+import {
+  MAX_NOTES_LENGTH,
+  type Availability,
+  type PriceUnit,
+  type SupplierCandidate,
+  type SupplierContact,
 } from "../domain/supplier.js";
 
 // Mapa de normalización: texto libre del modelo → unidad de precio canónica.
@@ -82,7 +83,11 @@ const rawSupplierSchema = z.object({
   availability: z.string().optional(),
   contact: rawContactSchema.optional(),
   trusted: z.boolean().optional(),
-  notes: z.string().optional(),
+  // Dato externo sin cota: se trunca (no se descarta al proveedor por una nota larga).
+  notes: z
+    .string()
+    .transform((s) => s.slice(0, MAX_NOTES_LENGTH))
+    .optional(),
   catalogPrice: z.number().optional(),
   address: z.string().optional(),
 });
