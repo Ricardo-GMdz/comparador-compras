@@ -14,6 +14,11 @@ import { rankSuppliers, selectBestSupplier } from "../ranking/rankSuppliers.js";
 import { buildQuoteMessage } from "../quotes/quoteTemplate.js";
 import { logger } from "../logging/logger.js";
 
+/** Limitador de tasa (inyectable): decide si un intento cabe en su ventana. */
+export interface RateLimiter {
+  limit(key: string): Promise<{ success: boolean }>;
+}
+
 /** Dependencias de la API (inyectables para test). */
 export interface ApiDeps {
   source: SupplierSource;
@@ -27,6 +32,12 @@ export interface ApiDeps {
   directoryPath: string;
   /** Si está presente, todas las rutas /api exigen la clave (menos login/publico). */
   auth?: { accessKey: string; now?: () => number };
+  /**
+   * Límites de tasa (opcionales): `login` por IP (frena fuerza bruta sobre la
+   * clave) y `costly` para los endpoints que llaman al modelo (buscar y
+   * enriquecer, con clave global: son el gasto directo en la API de Anthropic).
+   */
+  rateLimit?: { login: RateLimiter; costly: RateLimiter };
 }
 
 // Duración de la cookie de sesión: 30 días.
@@ -156,6 +167,35 @@ function sourcingErrorResponse(
   return { message: fallbackMessage, status: 502 };
 }
 
+/**
+ * IP del cliente detrás de un proxy: x-real-ip primero (valor único que setea
+ * el proxy y el cliente no controla) y, si falta, la primera de x-forwarded-for.
+ */
+function clientIp(realIp: string | undefined, forwardedFor: string | undefined): string {
+  const real = realIp?.trim();
+  if (real !== undefined && real.length > 0) {
+    return real;
+  }
+  const first = forwardedFor?.split(",")[0]?.trim();
+  return first !== undefined && first.length > 0 ? first : "desconocida";
+}
+
+/**
+ * Consulta un limitador con tolerancia a fallos: si su backend (Redis) falla,
+ * el request se permite y se registra el problema. Fail-open a propósito: un
+ * Redis caído ya degrada toda la app y no debe además bloquear al dueño.
+ */
+async function allowRequest(limiter: RateLimiter, key: string): Promise<boolean> {
+  try {
+    const result = await limiter.limit(key);
+    return result.success;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn("rate-limit: el limitador falló; se permite el request", { key, error: message });
+    return true;
+  }
+}
+
 export function buildApi(deps: ApiDeps): Hono {
   const app = new Hono();
 
@@ -180,6 +220,17 @@ export function buildApi(deps: ApiDeps): Hono {
     });
 
     app.post("/api/login", async (c) => {
+      // El límite corre ANTES de verificar la clave: cada intento (bueno o
+      // malo) consume ventana, si no la fuerza bruta sería gratis hasta acertar.
+      if (deps.rateLimit !== undefined) {
+        const ip = clientIp(c.req.header("x-real-ip"), c.req.header("x-forwarded-for"));
+        if (!(await allowRequest(deps.rateLimit.login, `ip:${ip}`))) {
+          return c.json(
+            { ok: false, error: "Demasiados intentos de clave. Esperá unos minutos." },
+            429,
+          );
+        }
+      }
       const body = (await c.req.json().catch(() => ({}))) as { key?: unknown };
       const key = typeof body.key === "string" ? body.key : "";
       if (!hashEqual(key, accessKey)) {
@@ -233,6 +284,15 @@ export function buildApi(deps: ApiDeps): Hono {
       );
     }
     const { query, region } = parsed.data;
+
+    // El límite de gasto corre tras validar (un body inválido no consume
+    // ventana) y antes de la llamada al modelo, que es lo que protege.
+    if (deps.rateLimit !== undefined && !(await allowRequest(deps.rateLimit.costly, "global"))) {
+      return c.json(
+        { ok: false, error: "Límite de búsquedas alcanzado. Esperá un rato y probá de nuevo." },
+        429,
+      );
+    }
 
     try {
       const candidates = await deps.source.search({ query, region });
@@ -325,6 +385,14 @@ export function buildApi(deps: ApiDeps): Hono {
     const supplier = suppliers.find((s) => supplierKey(s) === key);
     if (supplier === undefined) {
       return c.json({ ok: false, error: `No existe un proveedor con key '${key}'.` }, 404);
+    }
+
+    // Mismo límite de gasto que /api/buscar: también llama al modelo.
+    if (deps.rateLimit !== undefined && !(await allowRequest(deps.rateLimit.costly, "global"))) {
+      return c.json(
+        { ok: false, error: "Límite de búsquedas alcanzado. Esperá un rato y probá de nuevo." },
+        429,
+      );
     }
 
     try {

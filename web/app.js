@@ -515,8 +515,11 @@ $("loginForm").addEventListener("submit", async (e) => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ key }),
     });
+    // El server distingue clave incorrecta (401) de demasiados intentos (429):
+    // se muestra su mensaje para no inducir reintentos durante el bloqueo.
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      $("loginError").textContent = "Clave incorrecta.";
+      $("loginError").textContent = data.error ?? "Clave incorrecta.";
       return;
     }
     ocultarLogin();

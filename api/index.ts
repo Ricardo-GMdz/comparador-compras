@@ -4,6 +4,7 @@
 
 import { handle } from "hono/vercel";
 import { Redis } from "@upstash/redis";
+import { Ratelimit } from "@upstash/ratelimit";
 import Anthropic from "@anthropic-ai/sdk";
 import { loadVercelEnv } from "../src/config/vercelEnv.js";
 import { createSupplierSource, type SearchBudget } from "../src/sourcing/supplierSource.js";
@@ -37,6 +38,26 @@ const redisLike = {
 };
 const store = createRedisStore(redisLike);
 
+// Límites de tasa sobre el mismo Redis. Login: frena fuerza bruta sobre la
+// ACCESS_KEY por IP. Costly: tope global de llamadas al modelo por hora —
+// cada búsqueda son maxVariants llamadas a Opus con web_search (gasto directo).
+const LOGIN_ATTEMPTS = 5;
+const LOGIN_WINDOW = "15 m";
+const COSTLY_REQUESTS = 10;
+const COSTLY_WINDOW = "1 h";
+const rateLimit = {
+  login: new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(LOGIN_ATTEMPTS, LOGIN_WINDOW),
+    prefix: "rl:login",
+  }),
+  costly: new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(COSTLY_REQUESTS, COSTLY_WINDOW),
+    prefix: "rl:costly",
+  }),
+};
+
 const client = new Anthropic({ apiKey: env.anthropicApiKey });
 const app = buildApi({
   source: createSupplierSource({
@@ -51,6 +72,7 @@ const app = buildApi({
   now: () => new Date().toISOString(),
   directoryPath: "directorio",
   auth: { accessKey: env.accessKey },
+  rateLimit,
 });
 
 export const GET = handle(app);

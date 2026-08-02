@@ -843,6 +843,155 @@ describe("API — auth y público", () => {
   });
 });
 
+describe("API — rate limiting", () => {
+  const NOW_MS = 5_000_000;
+
+  /** Limitadores fake: permiten o niegan todo, registrando la key consultada. */
+  function allowAll() {
+    return { limit: vi.fn(async (_key: string) => ({ success: true })) };
+  }
+  function denyAll() {
+    return { limit: vi.fn(async (_key: string) => ({ success: false })) };
+  }
+
+  it("POST /api/login responde 429 sin cookie cuando se agotan los intentos, aun con clave correcta", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi({
+      ...deps,
+      auth: { accessKey: "secreta", now: () => NOW_MS },
+      rateLimit: { login: denyAll(), costly: allowAll() },
+    });
+    const res = await app.request("/api/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "secreta" }),
+    });
+    expect(res.status).toBe(429);
+    expect(res.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("el limitador de login prefiere x-real-ip (valor único del proxy) sobre x-forwarded-for", async () => {
+    const { deps } = fakeDeps();
+    const login = allowAll();
+    const app = buildApi({
+      ...deps,
+      auth: { accessKey: "secreta", now: () => NOW_MS },
+      rateLimit: { login, costly: allowAll() },
+    });
+    await app.request("/api/login", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-real-ip": "198.51.100.9",
+        "x-forwarded-for": "203.0.113.7, 10.0.0.1",
+      },
+      body: JSON.stringify({ key: "secreta" }),
+    });
+    expect(login.limit).toHaveBeenCalledWith(expect.stringContaining("198.51.100.9"));
+  });
+
+  it("si el limitador de login falla, la clave correcta sigue entrando (fail-open)", async () => {
+    const { deps } = fakeDeps();
+    const roto = {
+      limit: vi.fn(async (_key: string): Promise<{ success: boolean }> => {
+        throw new Error("redis caído");
+      }),
+    };
+    const app = buildApi({
+      ...deps,
+      auth: { accessKey: "secreta", now: () => NOW_MS },
+      rateLimit: { login: roto, costly: allowAll() },
+    });
+    const res = await app.request("/api/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "secreta" }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("set-cookie")).toContain("cc_auth=");
+  });
+
+  it("el limitador de login se consulta con la primera IP de x-forwarded-for", async () => {
+    const { deps } = fakeDeps();
+    const login = allowAll();
+    const app = buildApi({
+      ...deps,
+      auth: { accessKey: "secreta", now: () => NOW_MS },
+      rateLimit: { login, costly: allowAll() },
+    });
+    await app.request("/api/login", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "203.0.113.7, 10.0.0.1",
+      },
+      body: JSON.stringify({ key: "secreta" }),
+    });
+    expect(login.limit).toHaveBeenCalledWith(expect.stringContaining("203.0.113.7"));
+  });
+
+  it("POST /api/buscar responde 429 sin llamar al sourcing cuando el límite de gasto se agota", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi({ ...deps, rateLimit: { login: allowAll(), costly: denyAll() } });
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "lámina", region: "mx" }),
+    });
+    expect(res.status).toBe(429);
+    expect(deps.source.search).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/proveedor/:key/enriquecer responde 429 sin llamar al modelo cuando el límite se agota", async () => {
+    const { deps } = fakeDeps([makeSupplier({ website: "https://a.mx" })]);
+    const app = buildApi({ ...deps, rateLimit: { login: allowAll(), costly: denyAll() } });
+    const res = await app.request(`/api/proveedor/${encodeURIComponent("d:a.mx")}/enriquecer`, {
+      method: "POST",
+    });
+    expect(res.status).toBe(429);
+    expect(deps.source.enrichContact).not.toHaveBeenCalled();
+  });
+
+  it("con límites disponibles, login y buscar funcionan igual que sin rate limiting", async () => {
+    const { deps } = fakeDeps();
+    const app = buildApi({
+      ...deps,
+      auth: { accessKey: "secreta", now: () => NOW_MS },
+      rateLimit: { login: allowAll(), costly: allowAll() },
+    });
+    const login = await app.request("/api/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "secreta" }),
+    });
+    expect(login.status).toBe(200);
+    const jar = (login.headers.get("set-cookie") ?? "").split(";")[0];
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: jar ?? "" },
+      body: JSON.stringify({ query: "lámina", region: "mx" }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("si el limitador falla, el request se permite (fail-open: Redis caído no bloquea al dueño)", async () => {
+    const { deps } = fakeDeps();
+    const roto = {
+      limit: vi.fn(async (_key: string): Promise<{ success: boolean }> => {
+        throw new Error("redis caído");
+      }),
+    };
+    const app = buildApi({ ...deps, rateLimit: { login: allowAll(), costly: roto } });
+    const res = await app.request("/api/buscar", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "lámina", region: "mx" }),
+    });
+    expect(res.status).toBe(200);
+    expect(deps.source.search).toHaveBeenCalled();
+  });
+});
+
 describe("API — healthcheck público", () => {
   it("GET /api/health responde 200 { ok:true, status:'ok' } sin clave (aun con auth)", async () => {
     const { deps } = fakeDeps();
